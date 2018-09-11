@@ -1,0 +1,7 @@
+listen:
+  proto: tcp
+  port: 8000
+
+logger:
+  # debug,info,warn,error,fatal,panic
+  level: debug
