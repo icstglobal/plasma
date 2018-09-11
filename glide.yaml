@@ -1,0 +1,11 @@
+package: github.com/icstglobal/plasma
+import:
+- package: github.com/juju/errors
+- package: github.com/mitchellh/go-homedir
+  version: v1.0.0
+- package: github.com/sirupsen/logrus
+  version: v1.0.6
+- package: github.com/spf13/cobra
+  version: v0.0.3
+- package: github.com/spf13/viper
+  version: v1.2.0
