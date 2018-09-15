@@ -1,5 +1,5 @@
-hash: f70928dce4d982fa56a4b02e13ca67d3591fd32b96f65d64064fbe1d8111e3df
-updated: 2018-09-13T11:44:38.600739+08:00
+hash: ff00c4e54fc34ee5067fee65213726f5ace880f0fe2136855d0d3fdd2d592f30
+updated: 2018-09-14T17:20:40.985294+08:00
 imports:
 - name: github.com/aristanetworks/goarista
   version: ff33da284e760fcdb03c33d37a719e5ed30ba844
@@ -18,15 +18,9 @@ imports:
   - common/hexutil
   - common/math
   - common/mclock
-  - consensus
-  - core/rawdb
   - core/state
   - core/types
-  - core/vm
   - crypto
-  - crypto/bn256
-  - crypto/bn256/cloudflare
-  - crypto/bn256/google
   - crypto/secp256k1
   - crypto/sha3
   - ethdb
@@ -62,6 +56,8 @@ imports:
   - json/token
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
+- name: github.com/jinzhu/copier
+  version: 7e38e58719c33e0d44d585c4ab477a30f8cb82dd
 - name: github.com/juju/errors
   version: 22422dad46e14561a0854ad42497a75af9b61909
 - name: github.com/magiconair/properties
@@ -108,7 +104,6 @@ imports:
 - name: golang.org/x/crypto
   version: 0e37d006457bf46f9e6692014ba72ef82c33022c
   subpackages:
-  - ripemd160
   - ssh/terminal
 - name: golang.org/x/net
   version: 26e67e76b6c3f6ce91f7c52def5af501b4e0f3a2

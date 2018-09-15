@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/jinzhu/copier"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -25,10 +27,10 @@ type Transaction struct {
 }
 
 type UTXOIn struct {
-	BlockNum *big.Int `json:"blockNum"`
-	TxIndex  uint64   `json:"txIndex"`
-	OutIndex byte     `json:"outIndex"`
-	Sig      []byte   `json:"sig"`
+	BlockNum uint64 `json:"blockNum"`
+	TxIndex  uint32 `json:"txIndex"`
+	OutIndex byte   `json:"outIndex"`
+	Sig      []byte `json:"sig"`
 }
 
 type UTXOOut struct {
@@ -50,14 +52,10 @@ type txdata struct {
 }
 
 type txdataMarshaling struct {
-	AccountNonce hexutil.Uint64
-	Price        *hexutil.Big
-	GasLimit     hexutil.Uint64
-	Amount       *hexutil.Big
-	Payload      hexutil.Bytes
-	V            *hexutil.Big
-	R            *hexutil.Big
-	S            *hexutil.Big
+	//TODO:marhsal tx other fields
+	V *hexutil.Big
+	R *hexutil.Big
+	S *hexutil.Big
 }
 
 func NewTransaction(in1, in2 *UTXOIn, out1, out2 *UTXOOut) *Transaction {
@@ -72,6 +70,26 @@ func NewTransaction(in1, in2 *UTXOIn, out1, out2 *UTXOOut) *Transaction {
 
 func (tx *Transaction) ChainId() *big.Int {
 	return deriveChainId(tx.data.V)
+}
+
+//GetInsCopy returns a copy of the tx ins
+func (tx *Transaction) GetInsCopy() []*UTXOIn {
+	copy := make([]*UTXOIn, len(tx.data.ins))
+	if err := copier.Copy(copy, tx.data.ins); err != nil {
+		log.WithError(err).Error("failed to copy tx.data.ins")
+		return nil
+	}
+	return copy
+}
+
+//GetOutsCopy returns a copy of the tx outs
+func (tx *Transaction) GetOutsCopy() []*UTXOOut {
+	copy := make([]*UTXOOut, len(tx.data.outs))
+	if err := copier.Copy(copy, tx.data.outs); err != nil {
+		log.WithError(err).Error("failed to copy tx.data.outs")
+		return nil
+	}
+	return copy
 }
 
 // Protected returns whether the transaction is protected from replay protection.
@@ -184,6 +202,13 @@ func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 func (s Transactions) GetRlp(i int) []byte {
 	enc, _ := rlp.EncodeToBytes(s[i])
 	return enc
+}
+
+// Remove delete the i'th element from s
+func (s *Transactions) Remove(i int) {
+	// remove tx by swap it to the last pos in slice and then truncate the slice
+	s.Swap(i, s.Len()-1)
+	*s = (*s)[:s.Len()-1]
 }
 
 // TxDifference returns a new set which is the difference between a and b.
