@@ -9,3 +9,6 @@ import:
   version: v0.0.3
 - package: github.com/spf13/viper
   version: v1.2.0
+- package: github.com/jinzhu/copier
+- package: github.com/ethereum/go-ethereum
+  version: ^1.8.3
