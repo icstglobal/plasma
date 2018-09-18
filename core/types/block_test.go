@@ -34,8 +34,8 @@ func TestBlockEncoding(t *testing.T) {
 	// check("len(Transactions)", len(block.Transactions()), 1)
 
 	tx1 := &Transaction{}
-	in1 := &UTXOIn{BlockNum: big.NewInt(1), TxIndex: 0, OutIndex: 0, Sig: common.Hex2Bytes("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
-	in2 := &UTXOIn{BlockNum: big.NewInt(1), TxIndex: 1, OutIndex: 0, Sig: common.Hex2Bytes("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
+	in1 := &UTXOIn{BlockNum: 1, TxIndex: 0, OutIndex: 0, Sig: common.Hex2Bytes("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
+	in2 := &UTXOIn{BlockNum: 1, TxIndex: 1, OutIndex: 0, Sig: common.Hex2Bytes("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
 	tx1.data.ins = [2]*UTXOIn{in1, in2}
 
 	out1 := &UTXOOut{Owner: common.HexToAddress(""), Amount: big.NewInt(100)}

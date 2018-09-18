@@ -41,6 +41,7 @@ type UTXOOut struct {
 type txdata struct {
 	ins  [2]*UTXOIn
 	outs [2]*UTXOOut
+	fee  *big.Int
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -90,6 +91,14 @@ func (tx *Transaction) GetOutsCopy() []*UTXOOut {
 		return nil
 	}
 	return copy
+}
+
+// Fee returns a copy of the tx fee
+func (tx *Transaction) Fee() *big.Int {
+	fcopy := new(big.Int) // fcopy = 0
+	// new = old = old + 0
+	fcopy.Add(tx.data.fee, fcopy)
+	return fcopy
 }
 
 // Protected returns whether the transaction is protected from replay protection.

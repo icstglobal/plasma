@@ -43,20 +43,7 @@ var (
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
 
-	// ErrNonceTooLow is returned if the nonce of a transaction is lower than the
-	// one present in the local chain.
-	ErrNonceTooLow = errors.New("nonce too low")
-
-	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
-	// configured for the transaction pool.
-	ErrUnderpriced = errors.New("transaction underpriced")
-
-	// ErrReplaceUnderpriced is returned if a transaction is attempted to be replaced
-	// with a different one without the required price bump.
-	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
-
 	// ErrInsufficientFunds is returned if the total cost of executing a transaction
-	// is higher than the balance of the user's account.
 	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
 
 	// ErrNegativeValue is a sanity error to ensure noone is able to specify a
@@ -79,6 +66,9 @@ var (
 
 	// ErrTxTotalAmountNotEqual is returned if the total amount of tx in and out not equal
 	ErrTxTotalAmountNotEqual = errors.New("total amount of tx ins and outs not equal")
+
+	// ErrNotEnoughTxFee is returned if the tx fee is not bigger than zero
+	ErrNotEnoughTxFee = errors.New("not enough tx fee")
 )
 
 var (
@@ -102,6 +92,10 @@ var (
 	// General tx metrics
 	invalidTxCounter     = metrics.NewRegisteredCounter("txpool/invalid", nil)
 	underpricedTxCounter = metrics.NewRegisteredCounter("txpool/underpriced", nil)
+)
+
+var (
+	zeroFee = new(big.Int)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -465,6 +459,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrOversizedData
 	}
 
+	if tx.Fee().Cmp(zeroFee) <= 0 {
+		return ErrNotEnoughTxFee
+	}
+
 	// Make sure the transaction is signed properly
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
@@ -502,8 +500,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	for _, out := range newOuts {
 		totalOutAmount = totalOutAmount.Add(totalOutAmount, out.Amount)
 	}
-	// total in and out amounts should match
-	if totalInAmount.Cmp(totalOutAmount) != 0 {
+	// totalInAmount = totalOutAmount + fee
+	if totalInAmount.Cmp(totalOutAmount.Add(totalOutAmount, tx.Fee())) != 0 {
 		return ErrTxTotalAmountNotEqual
 	}
 
