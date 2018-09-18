@@ -22,7 +22,10 @@ var rootCmd = &cobra.Command{
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
 		n := new(network.Node)
-		n.Start()
+		err := n.Start()
+		if err != nil {
+			log.WithError(err).Fatal("node failed to start")
+		}
 	},
 }
 

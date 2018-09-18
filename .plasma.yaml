@@ -1,6 +1,9 @@
-listen:
+rpcserver:
   proto: tcp
   port: 8000
+
+httpserver:
+  port: 8080
 
 logger:
   # debug,info,warn,error,fatal,panic
