@@ -1,6 +1,7 @@
 package network
 
 import (
+	"github.com/icstglobal/plasma/core"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -48,8 +49,14 @@ func startRPC() (*RPCServer, error) {
 func startHTTP() (*HTTPServer, error) {
 	log.Info("try to start http server")
 	httpPort := viper.GetInt("httpserver.port")
-	http, err := ServeHTTP(httpPort)
-	if err != nil {
+
+	//TODO: init txpool and chain
+	http := &HTTPServer{
+		Port:   httpPort,
+		TxPool: new(core.TxPool),
+		Chain:  new(core.BlockChain),
+	}
+	if err := http.Start(); err != nil {
 		return nil, errors.Annotate(err, "failed to start http server")
 	}
 	log.WithField("port", httpPort).Info("http server is running")

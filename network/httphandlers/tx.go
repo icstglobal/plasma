@@ -1,8 +1,12 @@
 package httphandlers
 
 import (
+	"bytes"
 	"net/http"
 
+	"github.com/icstglobal/plasma/core"
+	"github.com/icstglobal/plasma/core/types"
+	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -11,10 +15,32 @@ type TxHandler struct {
 }
 
 // New handles transaction creation request
-func (th TxHandler) New() http.HandlerFunc {
+func (th TxHandler) New(txpool *core.TxPool) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		//TODO:
-		log.WithField("url", req.URL).Debug("handle http request")
+		defer req.Body.Close()
+		var buf bytes.Buffer
+		buf.ReadFrom(req.Body)
+		log.WithFields(log.Fields{
+			"url":         req.URL,
+			"method":      req.Method,
+			"request.boy": buf.String(),
+		}).Info("handle http request")
+
+		tx := new(types.Transaction)
+		if err := tx.UnmarshalJSON(buf.Bytes()); err != nil {
+			msg := "request body is not a valid tx json"
+			log.WithError(err).WithField("request.body", buf.String()).Error(msg)
+
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+
+		if err := txpool.AddLocal(tx); err != nil {
+			log.WithError(err).WithField("tx", tx).Warn("can not add tx to pool")
+
+			http.Error(w, errors.NewBadRequest(err, "can not add tx to pool").Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 }
@@ -23,7 +49,7 @@ func (th TxHandler) New() http.HandlerFunc {
 func (th TxHandler) Sign() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		//TODO:
-		log.WithField("url", req.URL).Debug("handle http request")
+		log.WithField("url", req.URL).WithField("method", req.Method).Debug("handle http request")
 	}
 
 }

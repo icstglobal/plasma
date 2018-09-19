@@ -15,3 +15,4 @@ bin
 vendor
 
 .DS_Store
+*.bak

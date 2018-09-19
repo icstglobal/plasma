@@ -6,29 +6,35 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/icstglobal/plasma/core"
 	"github.com/icstglobal/plasma/network/httphandlers"
 	"github.com/juju/errors"
 )
 
 // HTTPServer serves HTTP requests
 type HTTPServer struct {
+	Port   int
+	TxPool *core.TxPool
+	Chain  *core.BlockChain
+
 	s *http.Server
 }
 
-// ServeHTTP start a http server
-func ServeHTTP(port int) (*HTTPServer, error) {
+// Start is called to accept http requests
+func (hs *HTTPServer) Start() error {
 	s := &http.Server{
-		Addr:    fmt.Sprintf(":%v", port),
-		Handler: initMux(),
+		Addr:    fmt.Sprintf(":%v", hs.Port),
+		Handler: hs.initMux(),
 	}
 	l, err := net.Listen("tcp", s.Addr)
 	if err != nil {
-		return nil, errors.Annotatef(err, "tcp listener for http server failed, addr:%v", s.Addr)
+		return errors.Annotatef(err, "tcp listener for http server failed, addr:%v", s.Addr)
 	}
+	hs.s = s
 	// start http handling
 	go s.Serve(l)
 
-	return &HTTPServer{s: s}, nil
+	return nil
 }
 
 // Shutdown stops http processing
@@ -36,9 +42,9 @@ func (hs *HTTPServer) Shutdown(ctx context.Context) {
 	hs.s.Shutdown(ctx)
 }
 
-func initMux() *http.ServeMux {
+func (hs *HTTPServer) initMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/tx/new", httphandlers.Tx.New())
+	mux.HandleFunc("/tx/new", httphandlers.Tx.New(hs.TxPool))
 	mux.HandleFunc("/tx/sign", httphandlers.Tx.Sign())
 	return mux
 }
