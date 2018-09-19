@@ -1,13 +1,13 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/jinzhu/copier"
@@ -39,32 +39,26 @@ type UTXOOut struct {
 }
 
 type txdata struct {
-	ins  [2]*UTXOIn
-	outs [2]*UTXOOut
-	fee  *big.Int
+	Ins  [2]*UTXOIn  `json:"ins"`
+	Outs [2]*UTXOOut `json:"outs"`
+	Fee  *big.Int    `json:"fee"`
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	V *big.Int `json:"v"`
+	R *big.Int `json:"r"`
+	S *big.Int `json:"s"`
 
 	// This is only used when marshaling to JSON.
 	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
-type txdataMarshaling struct {
-	//TODO:marhsal tx other fields
-	V *hexutil.Big
-	R *hexutil.Big
-	S *hexutil.Big
-}
-
-func NewTransaction(in1, in2 *UTXOIn, out1, out2 *UTXOOut) *Transaction {
+func NewTransaction(in1, in2 *UTXOIn, out1, out2 *UTXOOut, fee *big.Int) *Transaction {
 	tx := Transaction{}
-	tx.data.ins[0] = in1
-	tx.data.ins[1] = in2
-	tx.data.outs[0] = out1
-	tx.data.outs[1] = out2
+	tx.data.Ins[0] = in1
+	tx.data.Ins[1] = in2
+	tx.data.Outs[0] = out1
+	tx.data.Outs[1] = out2
+	tx.data.Fee = fee
 
 	return &tx
 }
@@ -75,9 +69,9 @@ func (tx *Transaction) ChainId() *big.Int {
 
 //GetInsCopy returns a copy of the tx ins
 func (tx *Transaction) GetInsCopy() []*UTXOIn {
-	copy := make([]*UTXOIn, len(tx.data.ins))
-	if err := copier.Copy(copy, tx.data.ins); err != nil {
-		log.WithError(err).Error("failed to copy tx.data.ins")
+	copy := make([]*UTXOIn, len(tx.data.Ins))
+	if err := copier.Copy(copy, tx.data.Ins); err != nil {
+		log.WithError(err).Error("failed to copy tx.data.Ins")
 		return nil
 	}
 	return copy
@@ -85,9 +79,9 @@ func (tx *Transaction) GetInsCopy() []*UTXOIn {
 
 //GetOutsCopy returns a copy of the tx outs
 func (tx *Transaction) GetOutsCopy() []*UTXOOut {
-	copy := make([]*UTXOOut, len(tx.data.outs))
-	if err := copier.Copy(copy, tx.data.outs); err != nil {
-		log.WithError(err).Error("failed to copy tx.data.outs")
+	copy := make([]*UTXOOut, len(tx.data.Outs))
+	if err := copier.Copy(copy, tx.data.Outs); err != nil {
+		log.WithError(err).Error("failed to copy tx.data.Outs")
 		return nil
 	}
 	return copy
@@ -97,7 +91,7 @@ func (tx *Transaction) GetOutsCopy() []*UTXOOut {
 func (tx *Transaction) Fee() *big.Int {
 	fcopy := new(big.Int) // fcopy = 0
 	// new = old = old + 0
-	fcopy.Add(tx.data.fee, fcopy)
+	fcopy.Add(tx.data.Fee, fcopy)
 	return fcopy
 }
 
@@ -132,17 +126,21 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 }
 
 // MarshalJSON encodes the web3 RPC transaction format.
-func (tx *Transaction) MarshalJSON() ([]byte, error) {
+func (tx *Transaction) MarshalJSON(indent bool) ([]byte, error) {
 	hash := tx.Hash()
 	data := tx.data
 	data.Hash = &hash
-	return data.MarshalJSON()
+	if indent {
+		return json.MarshalIndent(&data, "", "\t")
+	}
+
+	return json.Marshal(&data)
 }
 
 // UnmarshalJSON decodes the web3 RPC transaction format.
 func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	var dec txdata
-	if err := dec.UnmarshalJSON(input); err != nil {
+	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
 	var V byte

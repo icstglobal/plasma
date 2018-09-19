@@ -102,7 +102,7 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
-// EIP155Transaction implements Signer using the EIP155 rules.
+// EIP155Signer implements Signer using the EIP155 rules.
 type EIP155Signer struct {
 	chainId, chainIdMul *big.Int
 }
@@ -136,8 +136,7 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(s.Hash(tx), tx.data.R, tx.data.S, V, true)
 }
 
-// WithSignature returns a new transaction with the given signature. This signature
-// needs to be in the [R || S || V] format where V is 0 or 1.
+// SignatureValues returns signature values. This signature
 func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	R, S, V, err = HomesteadSigner{}.SignatureValues(tx, sig)
 	if err != nil {
@@ -154,14 +153,14 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // It does not uniquely identify the transaction.
 func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 	return rlpHash([]interface{}{
-		tx.data.ins,
-		tx.data.outs,
+		tx.data.Ins,
+		tx.data.Outs,
+		tx.data.Fee,
 		s.chainId, uint(0), uint(0),
 	})
 }
 
-// HomesteadTransaction implements TransactionInterface using the
-// homestead rules.
+// HomesteadSigner implements Signer inteface using the homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
 
 func (s HomesteadSigner) Equal(s2 Signer) bool {
@@ -202,8 +201,9 @@ func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *
 // It does not uniquely identify the transaction.
 func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
 	return rlpHash([]interface{}{
-		tx.data.ins,
-		tx.data.outs,
+		tx.data.Ins,
+		tx.data.Outs,
+		tx.data.Fee,
 	})
 }
 
