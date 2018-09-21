@@ -604,6 +604,12 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (err error) {
 	return nil
 }
 
+// ReplaceHead replace currentBlock
+func (bc *BlockChain) ReplaceHead(block *types.Block) (err error) {
+	bc.insert(block)
+	return nil
+}
+
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
