@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"net/http"
 
-	"github.com/icstglobal/plasma/core"
+	// "github.com/icstglobal/plasma/core"
 	"github.com/icstglobal/plasma/core/types"
+	"github.com/icstglobal/plasma/plasma"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -15,7 +16,7 @@ type TxHandler struct {
 }
 
 // New handles transaction creation request
-func (th TxHandler) New(txpool *core.TxPool) http.HandlerFunc {
+func (th TxHandler) New(plasma *plasma.Plasma) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
 		var buf bytes.Buffer
@@ -35,7 +36,7 @@ func (th TxHandler) New(txpool *core.TxPool) http.HandlerFunc {
 			return
 		}
 
-		if err := txpool.AddLocal(tx); err != nil {
+		if err := plasma.TxPool().AddLocal(tx); err != nil {
 			log.WithError(err).WithField("tx", tx).Warn("can not add tx to pool")
 
 			http.Error(w, errors.NewBadRequest(err, "can not add tx to pool").Error(), http.StatusBadRequest)

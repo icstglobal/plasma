@@ -1,6 +1,7 @@
 package plasma
 
 import (
+	// "encoding/hex"
 	"math/big"
 	"os"
 	"os/user"
@@ -11,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/icstglobal/plasma/core"
 )
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
@@ -52,6 +53,7 @@ func init() {
 		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
 	} else {
 		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
+		DefaultConfig.Operbase = common.HexToAddress("85d6e595a3e64d3353b888bc49ee27f1b9f2a656")
 	}
 }
 
@@ -60,7 +62,7 @@ func init() {
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
-	Genesis *core.Genesis `toml:",omitempty"`
+	// Genesis *core.Genesis `toml:",omitempty"`
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
@@ -79,7 +81,7 @@ type Config struct {
 	TrieTimeout        time.Duration
 
 	// Mining-related options
-	Etherbase    common.Address `toml:",omitempty"`
+	Operbase     common.Address `toml:",omitempty"`
 	MinerThreads int            `toml:",omitempty"`
 	ExtraData    []byte         `toml:",omitempty"`
 	GasPrice     *big.Int
@@ -98,6 +100,12 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
+	// DataDir is the file system folder the node should use for any data storage
+	// requirements. The configured data directory will not be directly shared with
+	// registered services, instead those can use utility methods to create/access
+	// databases or flat files. This enables ephemeral nodes which can fully reside
+	// in memory.
+	DataDir string
 }
 
 type configMarshaling struct {

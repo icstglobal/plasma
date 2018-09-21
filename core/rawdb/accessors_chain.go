@@ -3,7 +3,9 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math/big"
+	// "runtime/debug"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -126,6 +128,8 @@ func HasHeader(db DatabaseReader, hash common.Hash, number uint64) bool {
 
 // ReadHeader retrieves the block header corresponding to the hash.
 func ReadHeader(db DatabaseReader, hash common.Hash, number uint64) *types.Header {
+	// debug.PrintStack()
+	fmt.Printf("hash: %v\n", hash.Hex())
 	data := ReadHeaderRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil

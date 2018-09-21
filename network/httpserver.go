@@ -8,13 +8,14 @@ import (
 
 	"github.com/icstglobal/plasma/core"
 	"github.com/icstglobal/plasma/network/httphandlers"
+	"github.com/icstglobal/plasma/plasma"
 	"github.com/juju/errors"
 )
 
 // HTTPServer serves HTTP requests
 type HTTPServer struct {
 	Port   int
-	TxPool *core.TxPool
+	Plasma *plasma.Plasma
 	Chain  *core.BlockChain
 
 	s *http.Server
@@ -44,7 +45,7 @@ func (hs *HTTPServer) Shutdown(ctx context.Context) {
 
 func (hs *HTTPServer) initMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/tx/new", httphandlers.Tx.New(hs.TxPool))
+	mux.HandleFunc("/tx/new", httphandlers.Tx.New(hs.Plasma))
 	mux.HandleFunc("/tx/sign", httphandlers.Tx.Sign())
 	return mux
 }

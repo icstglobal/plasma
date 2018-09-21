@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"reflect"
+	// "reflect"
 	"sync"
 	"time"
 
@@ -115,7 +115,7 @@ type blockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	GetBlockByNumber(number uint64) *types.Block
 
-	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	// SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -218,7 +218,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
 	}
 	pool.locals = newAccountSet(pool.signer)
-	pool.reset(nil, chain.CurrentBlock().Header())
+	// pool.reset(nil, chain.CurrentBlock().Header())
 
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
@@ -232,11 +232,11 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		}
 	}
 	// Subscribe events from blockchain
-	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	// pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 
 	// Start the event loop and return
 	pool.wg.Add(1)
-	go pool.loop()
+	// go pool.loop()
 
 	return pool
 }
@@ -464,10 +464,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 
 	// Make sure the transaction is signed properly
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
-	}
+	// from, err := types.Sender(pool.signer, tx)
+	// if err != nil {
+	// return ErrInvalidSender
+	// }
 
 	// the total amount in tx ins and outs should be equal
 	ins := tx.GetInsCopy()
@@ -489,9 +489,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 			return ErrTxOutNotFound
 		}
 		// the tx sender should own the unspent out
-		if !reflect.DeepEqual(unspentOuts[in.OutIndex].Owner, from) {
-			return ErrTxOutNotOwned
-		}
+		// if !reflect.DeepEqual(unspentOuts[in.OutIndex].Owner, from) {
+		// return ErrTxOutNotOwned
+		// }
 		totalInAmount = totalInAmount.Add(totalInAmount, unspentOuts[in.OutIndex].Amount)
 	}
 
@@ -501,9 +501,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		totalOutAmount = totalOutAmount.Add(totalOutAmount, out.Amount)
 	}
 	// totalInAmount = totalOutAmount + fee
-	if totalInAmount.Cmp(totalOutAmount.Add(totalOutAmount, tx.Fee())) != 0 {
-		return ErrTxTotalAmountNotEqual
-	}
+	log.Info("totalInAmount, totalOutAmount, fee", totalInAmount, totalOutAmount, tx.Fee())
+	// if totalInAmount.Cmp(totalOutAmount.Add(totalOutAmount, tx.Fee())) != 0 {
+	// return ErrTxTotalAmountNotEqual
+	// }
 
 	return nil
 }
@@ -744,6 +745,8 @@ func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction) bool) {
 
 // Get returns a transaction if it exists in the lookup, or nil if not found.
 func (t *txLookup) Get(hash common.Hash) *types.Transaction {
+	fmt.Printf("txLookup: %v \n", t)
+	fmt.Printf("txLookup: %v \n", t.lock)
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 

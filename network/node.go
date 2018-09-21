@@ -1,7 +1,9 @@
 package network
 
 import (
-	"github.com/icstglobal/plasma/core"
+	// "github.com/icstglobal/plasma/core"
+	// "github.com/ethereum/go-ethereum/node"
+	"github.com/icstglobal/plasma/plasma"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -50,11 +52,14 @@ func startHTTP() (*HTTPServer, error) {
 	log.Info("try to start http server")
 	httpPort := viper.GetInt("httpserver.port")
 
-	//TODO: init txpool and chain
+	plasma, err := plasma.New(&plasma.DefaultConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	http := &HTTPServer{
 		Port:   httpPort,
-		TxPool: new(core.TxPool),
-		Chain:  new(core.BlockChain),
+		Plasma: plasma,
 	}
 	if err := http.Start(); err != nil {
 		return nil, errors.Annotate(err, "failed to start http server")

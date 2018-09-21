@@ -17,50 +17,15 @@
 package core
 
 import (
-	"bytes"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"math"
 	"math/big"
-	"reflect"
-	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/icstglobal/plasma/core/types"
-)
-
-var (
-	// ErrInvalidSender is returned if the transaction contains an invalid signature.
-	ErrInvalidSender = errors.New("invalid sender")
-
-	// ErrInsufficientFunds is returned if the total cost of executing a transaction
-	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
-
-	// ErrNegativeValue is a sanity error to ensure noone is able to specify a
-	// transaction with a negative value.
-	ErrNegativeValue = errors.New("negative value")
-
-	// ErrOversizedData is returned if the input data of a transaction is greater
-	// than some meaningful limit a user might use. This is not a consensus error
-	// making the transaction invalid, rather a DOS protection.
-	ErrOversizedData = errors.New("oversized data")
-
-	// ErrTxInNotFound is returned if the tx in is not found by in index
-	ErrTxInNotFound = errors.New("tx in not found")
-
-	// ErrTxOutNotFound is returned if the tx out is not found by out index
-	ErrTxOutNotFound = errors.New("tx out not found")
-
-	// ErrTxOutNotOwned is returned if the tx out to be used is not owned by the tx sender
-	ErrTxOutNotOwned = errors.New("tx out not owned")
-
-	// ErrTxTotalAmountNotEqual is returned if the total amount of tx in and out not equal
-	ErrTxTotalAmountNotEqual = errors.New("total amount of tx ins and outs not equal")
-
-	// ErrNotEnoughTxFee is returned if the tx fee is not bigger than zero
-	ErrNotEnoughTxFee = errors.New("not enough tx fee")
 )
 
 const (
@@ -68,10 +33,10 @@ const (
 )
 
 type Plasma interface {
-	AccountManager() *accounts.Manager
 	BlockChain() *BlockChain
 	TxPool() *TxPool
 	ChainDb() ethdb.Database
+	Operbase() common.Address
 }
 
 // Operator a key element in plasma
@@ -88,12 +53,16 @@ type Operator struct {
 // NewOperator creates a new operator
 func NewOperator(plasma Plasma, privateKey *ecdsa.PrivateKey) *Operator {
 	oper := &Operator{
-		plasma:     Plasma,
-		Addr:       addr,
+		plasma:     plasma,
+		Addr:       plasma.Operbase(),
 		PrivateKey: privateKey,
 		quit:       make(chan struct{}),
 	}
 	return oper
+}
+
+func (self *Operator) SetOperbase(operbase common.Address) {
+	self.Addr = operbase
 }
 
 func (self *Operator) Start() {
@@ -105,24 +74,26 @@ func (self *Operator) start() {
 	defer ticker.Stop()
 	for {
 		select {
-		case <-quit:
+		case <-self.quit:
 			return
-		case t := <-ticker.C:
+		case <-ticker.C:
+			fmt.Printf("%v\n", "operator txs")
 			if txs := self.plasma.TxPool().Content(); len(txs) == 0 {
 				continue
 			}
+			fmt.Printf("%v\n", "operator txs..")
 			self.Seal()
 		}
 	}
 }
 
 func (self *Operator) Stop() {
-	close(quit)
+	close(self.quit)
 }
 
 // Seal get txs from txpool and construct block, then seal the block
 func (self *Operator) Seal() error {
-	block := constructBlock()
+	block := self.constructBlock()
 	self.plasma.BlockChain().WriteBlock(block)
 	self.plasma.BlockChain().ReplaceHead(block)
 	return nil
@@ -159,5 +130,6 @@ func (self *Operator) constructBlock() *types.Block {
 
 // SubmitBlock write block hash to root chain
 func (self *Operator) SubmitBlock() error {
-
+	// todo
+	return nil
 }

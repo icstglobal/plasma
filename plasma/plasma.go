@@ -1,7 +1,6 @@
 package plasma
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -11,15 +10,13 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	// "github.com/ethereum/go-ethereum/consensus"
+	"github.com/icstglobal/plasma/consensus"
 	// "github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
+	// "github.com/ethereum/go-ethereum/core/bloombits"
+	// "github.com/ethereum/go-ethereum/core/rawdb"
+	// "github.com/ethereum/go-ethereum/core/vm"
+	// "github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/icstglobal/plasma/core"
 	// "github.com/ethereum/go-ethereum/eth/filters"
 	// "github.com/ethereum/go-ethereum/eth/gasprice"
@@ -28,10 +25,12 @@ import (
 	// "github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	// "github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
+	// "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"path/filepath"
+	// "github.com/icstglobal/plasma/network"
 	// "github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -69,14 +68,14 @@ type Plasma struct {
 	// APIBackend *EthAPIBackend
 
 	// miner     *miner.Miner
-	operator  *core.Operator
-	gasPrice  *big.Int
-	etherbase common.Address
+	operator *core.Operator
+	gasPrice *big.Int
+	operbase common.Address
 
 	networkID uint64
 	// netRPCService *ethapi.PublicNetAPI
 
-	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and operbase)
 }
 
 func (s *Plasma) AddLesServer(ls LesServer) {
@@ -86,68 +85,62 @@ func (s *Plasma) AddLesServer(ls LesServer) {
 
 // New creates a new Plasma object (including the
 // initialisation of the common Plasma object)
-func New(ctx *node.ServiceContext, config *Config) (*Plasma, error) {
-	if config.SyncMode == downloader.LightSync {
-		return nil, errors.New("can't run eth.Plasma in light sync mode, use les.LightEthereum")
-	}
-	if !config.SyncMode.IsValid() {
-		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
-	}
-	chainDb, err := CreateDB(ctx, config, "chaindata")
+func New(config *Config) (*Plasma, error) {
+	// if config.SyncMode == downloader.LightSync {
+	// return nil, errors.New("can't run eth.Plasma in light sync mode, use les.LightEthereum")
+	// }
+	// if !config.SyncMode.IsValid() {
+	// return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
+	// }
+	chainDb, err := CreateDB(config, "chaindata")
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	chainConfig, _, genesisErr := core.SetupGenesisBlock(chainDb, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
-	log.Info("Initialised chain configuration", "config", chainConfig)
+	// log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Plasma{
-		config:         config,
-		chainDb:        chainDb,
-		chainConfig:    chainConfig,
-		eventMux:       ctx.EventMux,
-		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
-		shutdownChan:   make(chan bool),
-		networkID:      config.NetworkId,
-		gasPrice:       config.GasPrice,
-		etherbase:      config.Etherbase,
+		config:      config,
+		chainDb:     chainDb,
+		chainConfig: chainConfig,
+		// eventMux:       ctx.EventMux,
+		// accountManager: ctx.AccountManager,
+		// engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
+		shutdownChan: make(chan bool),
+		networkID:    config.NetworkId,
+		gasPrice:     config.GasPrice,
+		operbase:     config.Operbase,
 		// bloomRequests:  make(chan chan *bloombits.Retrieval),
 		// bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
 
 	// log.Info("Initialising Plasma protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
-	if !config.SkipBcVersionCheck {
-		bcVersion := rawdb.ReadDatabaseVersion(chainDb)
-		if bcVersion != core.BlockChainVersion && bcVersion != 0 {
-			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, core.BlockChainVersion)
-		}
-		rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
-	}
 	var (
-		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine)
 	if err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
-		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		eth.blockchain.SetHead(compat.RewindTo)
-		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
-	}
-	eth.bloomIndexer.Start(eth.blockchain)
+	// if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
+	// log.Warn("Rewinding chain to upgrade configuration", "err", compat)
+	// eth.blockchain.SetHead(compat.RewindTo)
+	// rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
+	// }
+	// eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
-		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
+		// config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
 	}
+	fmt.Printf("chainConfig: %v\n", eth.chainConfig)
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 	eth.operator = core.NewOperator(eth, nil)
+	eth.operator.Start()
 
 	// if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 	// return nil, err
@@ -183,46 +176,21 @@ func makeExtraData(extra []byte) []byte {
 }
 
 // CreateDB creates the chain database.
-func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
-	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
+func CreateDB(config *Config, name string) (ethdb.Database, error) {
+	path := ""
+	if filepath.IsAbs(name) {
+		path = name
+	}
+	path = filepath.Join(config.DataDir, name)
+
+	db, err := ethdb.NewLDBDatabase(path, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err
 	}
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/chaindata/")
-	}
+	// if db, ok := db.(*ethdb.LDBDatabase); ok {
+	// db.Meter("eth/db/chaindata/")
+	// }
 	return db, nil
-}
-
-// CreateConsensusEngine creates the required type of consensus engine instance for an Plasma service
-func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
-	// If proof-of-authority is requested, set it up
-	if chainConfig.Clique != nil {
-		return clique.New(chainConfig.Clique, db)
-	}
-	// Otherwise assume proof-of-work
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-		return ethash.NewFaker()
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-		return ethash.NewTester()
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
-		return ethash.NewShared()
-	default:
-		engine := ethash.New(ethash.Config{
-			CacheDir:       ctx.ResolvePath(config.CacheDir),
-			CachesInMem:    config.CachesInMem,
-			CachesOnDisk:   config.CachesOnDisk,
-			DatasetDir:     config.DatasetDir,
-			DatasetsInMem:  config.DatasetsInMem,
-			DatasetsOnDisk: config.DatasetsOnDisk,
-		})
-		engine.SetThreads(-1) // Disable CPU mining
-		return engine
-	}
 }
 
 // APIs return the collection of RPC services the ethereum package offers.
@@ -230,63 +198,42 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 // func (s *Plasma) APIs() []rpc.API {
 // }
 
-func (s *Plasma) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
-}
-
-func (s *Plasma) Etherbase() (eb common.Address, err error) {
+func (s *Plasma) Operbase() common.Address {
 	s.lock.RLock()
-	etherbase := s.etherbase
+	operbase := s.operbase
 	s.lock.RUnlock()
 
-	if etherbase != (common.Address{}) {
-		return etherbase, nil
+	if operbase != (common.Address{}) {
+		return operbase
 	}
-	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
-		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			etherbase := accounts[0].Address
 
-			s.lock.Lock()
-			s.etherbase = etherbase
-			s.lock.Unlock()
-
-			log.Info("Etherbase automatically configured", "address", etherbase)
-			return etherbase, nil
-		}
-	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	panic("don't have operbase!")
+	return common.Address{}
 }
 
 // SetEtherbase sets the mining reward address.
-func (s *Plasma) SetEtherbase(etherbase common.Address) {
+func (s *Plasma) SetEtherbase(operbase common.Address) {
 	s.lock.Lock()
-	s.etherbase = etherbase
+	s.operbase = operbase
 	s.lock.Unlock()
 
-	// s.miner.SetEtherbase(etherbase)
+	s.operator.SetOperbase(operbase)
 }
 
 func (s *Plasma) StartMining(local bool) error {
-	eb, err := s.Etherbase()
-	if err != nil {
-		log.Error("Cannot start mining without etherbase", "err", err)
-		return fmt.Errorf("etherbase missing: %v", err)
+	eb := s.Operbase()
+	nullAddr := common.Address{}
+	if eb == nullAddr {
+		log.Error("Cannot start mining without operbase")
+		return fmt.Errorf("operbase missing")
 	}
-	if clique, ok := s.engine.(*clique.Clique); ok {
-		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-		if wallet == nil || err != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
-			return fmt.Errorf("signer missing: %v", err)
-		}
-		clique.Authorize(eb, wallet.SignHash)
-	}
-	if local {
-		// If local (CPU) mining is started, we can disable the transaction rejection
-		// mechanism introduced to speed sync times. CPU mining on mainnet is ludicrous
-		// so none will ever hit this path, whereas marking sync done on CPU mining
-		// will ensure that private networks work in single miner mode too.
-		// atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
-	}
+	// if local {
+	// If local (CPU) mining is started, we can disable the transaction rejection
+	// mechanism introduced to speed sync times. CPU mining on mainnet is ludicrous
+	// so none will ever hit this path, whereas marking sync done on CPU mining
+	// will ensure that private networks work in single miner mode too.
+	// atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
+	// }
 	// go s.miner.Start(eb)
 	return nil
 }
@@ -346,7 +293,7 @@ func (s *Plasma) Start(srvr *p2p.Server) error {
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Plasma protocol.
 func (s *Plasma) Stop() error {
-	s.bloomIndexer.Close()
+	// s.bloomIndexer.Close()
 	s.blockchain.Stop()
 	// s.protocolManager.Stop()
 	if s.lesServer != nil {

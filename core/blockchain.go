@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	// "runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -165,7 +166,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, err
 	}
 	// Take ownership of this particular state
-	go bc.update()
+	// go bc.update()
 	return bc, nil
 }
 
@@ -472,6 +473,7 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 // GetBlock retrieves a block from the database by hash and number,
 // caching it if found.
 func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	// debug.PrintStack()
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block.(*types.Block)
