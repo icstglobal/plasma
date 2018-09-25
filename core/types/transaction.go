@@ -23,36 +23,50 @@ type Transaction struct {
 	// caches
 	hash atomic.Value
 	size atomic.Value
-	from atomic.Value
 }
 
-type UTXOIn struct {
+type UTXOID struct {
 	BlockNum uint64 `json:"blockNum"`
 	TxIndex  uint32 `json:"txIndex"`
 	OutIndex byte   `json:"outIndex"`
-	Sig      []byte `json:"sig"`
 }
 
-type UTXOOut struct {
+type UTXO struct {
+	UTXOID
 	Owner  common.Address `json:"owner"`
 	Amount *big.Int       `json:"amount"`
 }
 
-type txdata struct {
-	Ins  [2]*UTXOIn  `json:"ins"`
-	Outs [2]*UTXOOut `json:"outs"`
-	Fee  *big.Int    `json:"fee"`
+func (u UTXO) ID() UTXOID {
+	return u.UTXOID
+}
 
-	// Signature values
+type TxOut struct {
+	Owner  common.Address `json:"owner"`
+	Amount *big.Int       `json:"amount"`
+}
+
+// Sig represents the signature values
+type Sig struct {
 	V *big.Int `json:"v"`
 	R *big.Int `json:"r"`
 	S *big.Int `json:"s"`
+}
 
+type txdata struct {
+	Ins  [2]*UTXO  `json:"ins"`
+	Outs [2]*TxOut `json:"outs"`
+	Fee  *big.Int  `json:"fee"`
+
+	Sigs [2][]byte `json:"sigs"`
+	// Sig1 Sig `json:"Sig1"`
+	// Sig2 Sig `json:"Sig2"`
 	// This is only used when marshaling to JSON.
 	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
-func NewTransaction(in1, in2 *UTXOIn, out1, out2 *UTXOOut, fee *big.Int) *Transaction {
+// NewTransaction makes a tx from given inputs and out puts
+func NewTransaction(in1, in2 *UTXO, out1, out2 *TxOut, fee *big.Int) *Transaction {
 	tx := Transaction{}
 	tx.data.Ins[0] = in1
 	tx.data.Ins[1] = in2
@@ -63,13 +77,9 @@ func NewTransaction(in1, in2 *UTXOIn, out1, out2 *UTXOOut, fee *big.Int) *Transa
 	return &tx
 }
 
-func (tx *Transaction) ChainId() *big.Int {
-	return deriveChainId(tx.data.V)
-}
-
 //GetInsCopy returns a copy of the tx ins
-func (tx *Transaction) GetInsCopy() []*UTXOIn {
-	copy := make([]*UTXOIn, len(tx.data.Ins))
+func (tx *Transaction) GetInsCopy() []*UTXO {
+	copy := make([]*UTXO, len(tx.data.Ins))
 	if err := copier.Copy(copy, tx.data.Ins); err != nil {
 		log.WithError(err).Error("failed to copy tx.data.Ins")
 		return nil
@@ -78,8 +88,8 @@ func (tx *Transaction) GetInsCopy() []*UTXOIn {
 }
 
 //GetOutsCopy returns a copy of the tx outs
-func (tx *Transaction) GetOutsCopy() []*UTXOOut {
-	copy := make([]*UTXOOut, len(tx.data.Outs))
+func (tx *Transaction) GetOutsCopy() []*TxOut {
+	copy := make([]*TxOut, len(tx.data.Outs))
 	if err := copier.Copy(copy, tx.data.Outs); err != nil {
 		log.WithError(err).Error("failed to copy tx.data.Outs")
 		return nil
@@ -93,20 +103,6 @@ func (tx *Transaction) Fee() *big.Int {
 	// new = old = old + 0
 	fcopy.Add(tx.data.Fee, fcopy)
 	return fcopy
-}
-
-// Protected returns whether the transaction is protected from replay protection.
-func (tx *Transaction) Protected() bool {
-	return isProtectedV(tx.data.V)
-}
-
-func isProtectedV(V *big.Int) bool {
-	if V.BitLen() <= 8 {
-		v := V.Uint64()
-		return v != 27 && v != 28
-	}
-	// anything not 27 or 28 are considered unprotected
-	return true
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -143,16 +139,18 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	var V byte
-	if isProtectedV(dec.V) {
-		chainID := deriveChainId(dec.V).Uint64()
-		V = byte(dec.V.Uint64() - 35 - 2*chainID)
-	} else {
-		V = byte(dec.V.Uint64() - 27)
+	// validate signatures after doing marshal
+	sigs := dec.Sigs
+	for _, s := range sigs {
+		r, s, v := SignatureValues(s[:])
+		var V byte
+		chainID := deriveChainId(v).Uint64()
+		V = byte(v.Uint64() - 35 - 2*chainID)
+		if !crypto.ValidateSignatureValues(V, r, s, false) {
+			return ErrInvalidSig
+		}
 	}
-	if !crypto.ValidateSignatureValues(V, dec.R, dec.S, false) {
-		return ErrInvalidSig
-	}
+
 	*tx = Transaction{data: dec}
 	return nil
 }
@@ -182,18 +180,11 @@ func (tx *Transaction) Size() common.StorageSize {
 
 // WithSignature returns a new transaction with the given signature.
 // This signature needs to be formatted as described in the yellow paper (v+27).
-func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, error) {
-	r, s, v, err := signer.SignatureValues(tx, sig)
-	if err != nil {
-		return nil, err
-	}
+func (tx *Transaction) WithSignature(signer Signer, sig1, sig2 []byte) (*Transaction, error) {
 	cpy := &Transaction{data: tx.data}
-	cpy.data.R, cpy.data.S, cpy.data.V = r, s, v
+	cpy.data.Sigs[0] = sig1
+	cpy.data.Sigs[1] = sig2
 	return cpy, nil
-}
-
-func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
-	return tx.data.V, tx.data.R, tx.data.S
 }
 
 // Transactions is a Transaction slice type for basic sorting.
