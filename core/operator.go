@@ -77,7 +77,6 @@ func (self *Operator) start() {
 		case <-self.quit:
 			return
 		case <-ticker.C:
-			fmt.Printf("%v\n", "operator txs")
 			if txs := self.plasma.TxPool().Content(); len(txs) == 0 {
 				continue
 			}
@@ -96,6 +95,12 @@ func (self *Operator) Seal() error {
 	block := self.constructBlock()
 	self.plasma.BlockChain().WriteBlock(block)
 	self.plasma.BlockChain().ReplaceHead(block)
+	for _, v := range block.Transactions() {
+		fmt.Printf("%v\n", v)
+		hash := v.Hash()
+		self.plasma.TxPool().removeTx(hash, true)
+	}
+
 	return nil
 }
 
