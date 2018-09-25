@@ -58,9 +58,7 @@ type txdata struct {
 	Outs [2]*TxOut `json:"outs"`
 	Fee  *big.Int  `json:"fee"`
 
-	Sigs [2][]byte `json:"sigs"`
-	// Sig1 Sig `json:"Sig1"`
-	// Sig2 Sig `json:"Sig2"`
+	Sigs [2]Sig `json:"sigs"`
 	// This is only used when marshaling to JSON.
 	Hash *common.Hash `json:"hash" rlp:"-"`
 }
@@ -79,22 +77,23 @@ func NewTransaction(in1, in2 *UTXO, out1, out2 *TxOut, fee *big.Int) *Transactio
 
 //GetInsCopy returns a copy of the tx ins
 func (tx *Transaction) GetInsCopy() []*UTXO {
-	copy := make([]*UTXO, len(tx.data.Ins))
-	if err := copier.Copy(copy, tx.data.Ins); err != nil {
+	log.WithFields(log.Fields{"in1": tx.data.Ins[0], "in2": tx.data.Ins[1]}).Debug("Transaction.GetInsCopy")
+	var copy = [2]*UTXO{&UTXO{}, &UTXO{}}
+	if err := copier.Copy(&copy, tx.data.Ins); err != nil {
 		log.WithError(err).Error("failed to copy tx.data.Ins")
 		return nil
 	}
-	return copy
+	return copy[:]
 }
 
 //GetOutsCopy returns a copy of the tx outs
 func (tx *Transaction) GetOutsCopy() []*TxOut {
-	copy := make([]*TxOut, len(tx.data.Outs))
-	if err := copier.Copy(copy, tx.data.Outs); err != nil {
+	var copy = [2]*TxOut{&TxOut{}, &TxOut{}}
+	if err := copier.Copy(&copy, tx.data.Outs); err != nil {
 		log.WithError(err).Error("failed to copy tx.data.Outs")
 		return nil
 	}
-	return copy
+	return copy[:]
 }
 
 // Fee returns a copy of the tx fee
@@ -122,7 +121,11 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 }
 
 // MarshalJSON encodes the web3 RPC transaction format.
-func (tx *Transaction) MarshalJSON(indent bool) ([]byte, error) {
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	return tx.marshalJSON(false)
+}
+
+func (tx *Transaction) marshalJSON(indent bool) ([]byte, error) {
 	hash := tx.Hash()
 	data := tx.data
 	data.Hash = &hash
@@ -142,11 +145,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	// validate signatures after doing marshal
 	sigs := dec.Sigs
 	for _, s := range sigs {
-		r, s, v := SignatureValues(s[:])
-		var V byte
-		chainID := deriveChainId(v).Uint64()
-		V = byte(v.Uint64() - 35 - 2*chainID)
-		if !crypto.ValidateSignatureValues(V, r, s, false) {
+		chainID := deriveChainId(s.V).Uint64()
+		V := byte(s.V.Uint64() - 35 - 2*chainID)
+		if !crypto.ValidateSignatureValues(V, s.R, s.S, false) {
 			return ErrInvalidSig
 		}
 	}
@@ -182,8 +183,8 @@ func (tx *Transaction) Size() common.StorageSize {
 // This signature needs to be formatted as described in the yellow paper (v+27).
 func (tx *Transaction) WithSignature(signer Signer, sig1, sig2 []byte) (*Transaction, error) {
 	cpy := &Transaction{data: tx.data}
-	cpy.data.Sigs[0] = sig1
-	cpy.data.Sigs[1] = sig2
+	cpy.data.Sigs[0].R, cpy.data.Sigs[0].S, cpy.data.Sigs[0].V = signer.SignatureValues(sig1)
+	cpy.data.Sigs[1].R, cpy.data.Sigs[1].S, cpy.data.Sigs[1].V = signer.SignatureValues(sig2)
 	return cpy, nil
 }
 

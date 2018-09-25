@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	// "reflect"
 	"sync"
 	"time"
 
@@ -117,14 +118,13 @@ type blockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	GetBlockByNumber(number uint64) *types.Block
 
-	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	// SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
 type utxoSet interface {
 	Get(id types.UTXOID) *types.UTXO
-	// Unspent returns true only if the utxo exists and is unspent
-	Unspent(id types.UTXOID) bool
 	Del(id types.UTXOID) error
+	Write(utxo *types.UTXO) error
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -191,7 +191,7 @@ type TxPool struct {
 	config       TxPoolConfig
 	chainconfig  *params.ChainConfig
 	chain        blockChain
-	utxoSet      utxoSet
+	us           utxoSet
 	txFeed       event.Feed
 	scope        event.SubscriptionScope
 	chainHeadCh  chan ChainHeadEvent
@@ -211,7 +211,7 @@ type TxPool struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, us utxoSet) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -225,9 +225,10 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		beats:       make(map[common.Address]time.Time),
 		all:         newTxLookup(),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
+		us:          us,
 	}
 	pool.locals = newAccountSet(pool.signer)
-	pool.reset(nil, chain.CurrentBlock().Header())
+	// pool.reset(nil, chain.CurrentBlock().Header())
 
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
@@ -241,11 +242,11 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		}
 	}
 	// Subscribe events from blockchain
-	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	// pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 
 	// Start the event loop and return
 	pool.wg.Add(1)
-	go pool.loop()
+	// go pool.loop()
 
 	return pool
 }
@@ -485,7 +486,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	ins := tx.GetInsCopy()
 	totalInAmount := new(big.Int)
 	for i, in := range ins {
-		utxo := pool.utxoSet.Get(in.ID())
+		log.WithFields(log.Fields{"blockNum": in.BlockNum, "txIndex": in.TxIndex, "outIndex": in.OutIndex}).Debug("validte in with utxo set")
+		utxo := pool.us.Get(in.ID())
 		// make sure utxo exists and is unspent
 		if utxo == nil {
 			return ErrorAlreadySpent
@@ -503,6 +505,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		totalOutAmount = totalOutAmount.Add(totalOutAmount, out.Amount)
 	}
 	// totalInAmount = totalOutAmount + fee
+	log.Info("totalInAmount, totalOutAmount, fee", totalInAmount, totalOutAmount, tx.Fee())
 	if totalInAmount.Cmp(totalOutAmount.Add(totalOutAmount, tx.Fee())) != 0 {
 		return ErrTxTotalAmountNotEqual
 	}

@@ -127,14 +127,15 @@ var big8 = big.NewInt(8)
 func (s EIP155Signer) Sender(tx *Transaction) (senders [2]common.Address, err error) {
 	txHash := s.Hash(tx)
 	for i, sig := range tx.data.Sigs {
-		R, S, V := s.SignatureValues(sig)
-		chainId := deriveChainId(V)
+		chainId := deriveChainId(sig.V)
 		if chainId.Cmp(s.chainId) != 0 {
 			return senders, ErrInvalidChainId
 		}
-		V = V.Sub(V, s.chainIdMul)
+		fmt.Printf("EIP155Signer.Sender:V:%v\n", sig.V)
+		V := sig.V.Sub(sig.V, s.chainIdMul)
 		V.Sub(V, big8)
-		if senders[i], err = recoverPlain(txHash, R, S, V); err != nil {
+		fmt.Printf("EIP155Signer.Sender:V:%v\n", V)
+		if senders[i], err = recoverPlain(txHash, sig.R, sig.S, V); err != nil {
 			return senders, err
 		}
 	}
@@ -145,6 +146,7 @@ func (s EIP155Signer) Sender(tx *Transaction) (senders [2]common.Address, err er
 func (s EIP155Signer) SignatureValues(sig []byte) (R, S, V *big.Int) {
 	R, S, V = SignatureValues(sig)
 	if s.chainId.Sign() != 0 {
+		fmt.Printf("EIP155Signer.SignatureValues:v:%v\n", sig[64])
 		V = big.NewInt(int64(sig[64] + 35))
 		V.Add(V, s.chainIdMul)
 	}
@@ -171,6 +173,7 @@ func SignatureValues(sig []byte) (r, s, v *big.Int) {
 	r = new(big.Int).SetBytes(sig[:32])
 	s = new(big.Int).SetBytes(sig[32:64])
 	v = new(big.Int).SetBytes([]byte{sig[64] + 27})
+	fmt.Printf("SignatureValues,v:%v\n", v)
 	return r, s, v
 }
 

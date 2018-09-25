@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	// "runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -165,7 +166,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, err
 	}
 	// Take ownership of this particular state
-	go bc.update()
+	// go bc.update()
 	return bc, nil
 }
 
@@ -601,6 +602,12 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (err error) {
 
 	rawdb.WriteBlock(bc.db, block)
 
+	return nil
+}
+
+// ReplaceHead replace currentBlock
+func (bc *BlockChain) ReplaceHead(block *types.Block) (err error) {
+	bc.insert(block)
 	return nil
 }
 

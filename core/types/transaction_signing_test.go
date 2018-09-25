@@ -2,43 +2,19 @@ package types
 
 import (
 	"math/big"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestFee(t *testing.T) {
-	tx := new(Transaction)
-	tx.data.Fee = big.NewInt(10)
-
-	fcopy := tx.Fee()
-	fcopy = fcopy.Add(fcopy, big.NewInt(1))
-
-	if fcopy.Cmp(tx.data.Fee) == 0 {
-		t.Logf("fee:%v, fcopy:%v", tx.data.Fee, fcopy)
-		t.Fail()
-	}
-}
-
-func BenchmarkBigIntCopyByAdd(b *testing.B) {
-	tx := new(Transaction)
-	tx.data.Fee, _ = new(big.Int).SetString("100000000222222222222222222220000000000000000000", 10)
-
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		tx.Fee()
-	}
-}
-
-func TestMarshalTx(t *testing.T) {
+func TestEIP155Signing(t *testing.T) {
 	senderKey, _ := crypto.GenerateKey()
 	sender := crypto.PubkeyToAddress(senderKey.PublicKey)
 
 	receiverKey, _ := crypto.GenerateKey()
 	receiver := crypto.PubkeyToAddress(receiverKey.PublicKey)
 
-	signer := NewEIP155Signer(big.NewInt(18))
+	signer := NewEIP155Signer(big.NewInt(1))
 
 	tx1 := &Transaction{}
 	in1 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
@@ -50,6 +26,7 @@ func TestMarshalTx(t *testing.T) {
 	tx1.data.Outs = [2]*TxOut{out1, out2}
 	tx1.data.Fee = big.NewInt(10)
 
+	t.Log("sign tx")
 	tx1, err := SignTx(tx1, signer, senderKey, senderKey)
 	if err != nil {
 		t.Fatal("failed to sign tx", err)
@@ -59,15 +36,17 @@ func TestMarshalTx(t *testing.T) {
 	if err != nil {
 		t.Fatal("unable to marshal tx")
 	}
+	t.Logf("tx json:%v", string(buf))
 
-	tx2 := new(Transaction)
-	err = tx2.UnmarshalJSON(buf)
+	t.Log("recover senders")
+	sendersRecovered, err := Sender(signer, tx1)
 	if err != nil {
-		t.Logf("json: %v", string(buf))
-		t.Fatal("unable to unmarshal tx", err)
+		t.Fatal(err)
 	}
-	if reflect.DeepEqual(tx1, tx2) {
-		t.Logf("json: %v", string(buf))
-		t.Fatal("tx not correctly marshaled")
+	for _, senderRecovered := range sendersRecovered {
+		if senderRecovered.String() != sender.String() {
+			t.Errorf("exected from and address to be equal. Got %x want %x", senderRecovered, sender)
+		}
 	}
+
 }
