@@ -34,15 +34,17 @@ func TestBlockEncoding(t *testing.T) {
 	// check("len(Transactions)", len(block.Transactions()), 1)
 
 	tx1 := &Transaction{}
-	in1 := &UTXOIn{BlockNum: 1, TxIndex: 0, OutIndex: 0, Sig: common.Hex2Bytes("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
-	in2 := &UTXOIn{BlockNum: 1, TxIndex: 1, OutIndex: 0, Sig: common.Hex2Bytes("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
-	tx1.data.ins = [2]*UTXOIn{in1, in2}
+	in1 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: common.HexToAddress("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
+	in2 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, Owner: common.HexToAddress("53e44dece9d583ab238ded76636e2cc3b16d2ddd48f19c22545bf9c4878539732fcf6612069f082c96ab159c42de5dbd64a6e4088dbe1756d116a253ea532b6501")}
+	tx1.data.Ins = [2]*UTXO{in1, in2}
 
-	out1 := &UTXOOut{Owner: common.HexToAddress(""), Amount: big.NewInt(100)}
-	out2 := &UTXOOut{Owner: common.HexToAddress(""), Amount: big.NewInt(0)} //zero output
-	tx1.data.outs = [2]*UTXOOut{out1, out2}
+	out1 := &TxOut{Owner: common.HexToAddress(""), Amount: big.NewInt(100)}
+	out2 := &TxOut{Owner: common.HexToAddress(""), Amount: big.NewInt(0)} //zero output
+	tx1.data.Outs = [2]*TxOut{out1, out2}
+	tx1.data.Fee = big.NewInt(10)
 
-	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
+	sig := common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100")
+	tx1, _ = tx1.WithSignature(EIP155Signer{}, sig, sig)
 	block.transactions = append(block.transactions, tx1)
 
 	//inti a new block obj

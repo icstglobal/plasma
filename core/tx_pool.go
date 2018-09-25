@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	// "reflect"
 	"sync"
 	"time"
 
@@ -67,6 +68,8 @@ var (
 	// ErrTxTotalAmountNotEqual is returned if the total amount of tx in and out not equal
 	ErrTxTotalAmountNotEqual = errors.New("total amount of tx ins and outs not equal")
 
+	// ErrorAlreadySpent returns if the utxo as tx in has been spent already
+	ErrorAlreadySpent = errors.New("utxo already spent")
 	// ErrNotEnoughTxFee is returned if the tx fee is not bigger than zero
 	ErrNotEnoughTxFee = errors.New("not enough tx fee")
 )
@@ -115,7 +118,13 @@ type blockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	GetBlockByNumber(number uint64) *types.Block
 
-	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+	// SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+}
+
+type utxoSet interface {
+	Get(id types.UTXOID) *types.UTXO
+	Del(id types.UTXOID) error
+	Write(utxo *types.UTXO) error
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -182,7 +191,7 @@ type TxPool struct {
 	config       TxPoolConfig
 	chainconfig  *params.ChainConfig
 	chain        blockChain
-	gasPrice     *big.Int
+	us           utxoSet
 	txFeed       event.Feed
 	scope        event.SubscriptionScope
 	chainHeadCh  chan ChainHeadEvent
@@ -202,7 +211,7 @@ type TxPool struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, us utxoSet) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -216,9 +225,10 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		beats:       make(map[common.Address]time.Time),
 		all:         newTxLookup(),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
+		us:          us,
 	}
 	pool.locals = newAccountSet(pool.signer)
-	pool.reset(nil, chain.CurrentBlock().Header())
+	// pool.reset(nil, chain.CurrentBlock().Header())
 
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
@@ -232,11 +242,11 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		}
 	}
 	// Subscribe events from blockchain
-	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	// pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 
 	// Start the event loop and return
 	pool.wg.Add(1)
-	go pool.loop()
+	// go pool.loop()
 
 	return pool
 }
@@ -293,19 +303,21 @@ func (pool *TxPool) loop() {
 		case <-evict.C:
 			pool.mu.Lock()
 			for _, tx := range pool.queue {
-				addr, err := pool.signer.Sender(tx)
+				addrs, err := pool.signer.Sender(tx)
 				if err != nil {
 					log.WithField("tx", tx).Warn("invalid tx sender, remove this tx")
 					pool.removeTx(tx.Hash(), true)
 					continue
 				}
-				// Skip local transactions from the eviction mechanism
-				if pool.locals.contains(addr) {
-					continue
-				}
-				// Any non-locals old enough should be removed
-				if time.Since(pool.beats[addr]) > pool.config.Lifetime {
-					pool.removeTx(tx.Hash(), true)
+				for _, addr := range addrs {
+					// Skip local transactions from the eviction mechanism
+					if pool.locals.contains(addr) {
+						continue
+					}
+					// Any non-locals old enough should be removed
+					if time.Since(pool.beats[addr]) > pool.config.Lifetime {
+						pool.removeTx(tx.Hash(), true)
+					}
 				}
 			}
 			pool.mu.Unlock()
@@ -439,13 +451,15 @@ func (pool *TxPool) Content() types.Transactions {
 func (pool *TxPool) local() map[common.Address]types.Transactions {
 	txs := make(map[common.Address]types.Transactions)
 	for _, tx := range pool.queue {
-		addr, err := pool.signer.Sender(tx)
+		addrs, err := pool.signer.Sender(tx)
 		if err != nil {
 			log.WithField("tx", tx).Warn("invalid tx sender, ignore this tx")
 			continue
 		}
-		if _, found := pool.locals.accounts[addr]; found {
-			txs[addr] = append(txs[addr], tx)
+		for _, addr := range addrs {
+			if _, found := pool.locals.accounts[addr]; found {
+				txs[addr] = append(txs[addr], tx)
+			}
 		}
 	}
 	return txs
@@ -464,35 +478,25 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 
 	// Make sure the transaction is signed properly
-	from, err := types.Sender(pool.signer, tx)
+	senders, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
 	}
 
-	// the total amount in tx ins and outs should be equal
 	ins := tx.GetInsCopy()
 	totalInAmount := new(big.Int)
-	for _, in := range ins {
-		blc := pool.chain.GetBlockByNumber(in.BlockNum)
-		trans := blc.Transactions()
-		if in.TxIndex >= uint32(len(trans)) {
-			return ErrTxInNotFound
+	for i, in := range ins {
+		log.WithFields(log.Fields{"blockNum": in.BlockNum, "txIndex": in.TxIndex, "outIndex": in.OutIndex}).Debug("validte in with utxo set")
+		utxo := pool.us.Get(in.ID())
+		// make sure utxo exists and is unspent
+		if utxo == nil {
+			return ErrorAlreadySpent
 		}
-		unspentOutTx := trans[in.TxIndex]
-		// make sure the unspent out has been confirmed by the previous payers
-		if _, err := types.Sender(pool.signer, unspentOutTx); err != nil {
-			return ErrInvalidSender
-		}
-
-		unspentOuts := unspentOutTx.GetOutsCopy()
-		if int(in.OutIndex) >= len(unspentOuts) {
-			return ErrTxOutNotFound
-		}
-		// the tx sender should own the unspent out
-		if !reflect.DeepEqual(unspentOuts[in.OutIndex].Owner, from) {
+		// the signer should own the unspent tx out
+		if !reflect.DeepEqual(utxo.Owner, senders[i]) {
 			return ErrTxOutNotOwned
 		}
-		totalInAmount = totalInAmount.Add(totalInAmount, unspentOuts[in.OutIndex].Amount)
+		totalInAmount = totalInAmount.Add(totalInAmount, utxo.Amount)
 	}
 
 	newOuts := tx.GetOutsCopy()
@@ -501,6 +505,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		totalOutAmount = totalOutAmount.Add(totalOutAmount, out.Amount)
 	}
 	// totalInAmount = totalOutAmount + fee
+	log.Info("totalInAmount, totalOutAmount, fee", totalInAmount, totalOutAmount, tx.Fee())
 	if totalInAmount.Cmp(totalOutAmount.Add(totalOutAmount, tx.Fee())) != 0 {
 		return ErrTxTotalAmountNotEqual
 	}
@@ -530,7 +535,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		//TODO: discard some tx? old one or just reject the new one?
 	}
-	from, _ := types.Sender(pool.signer, tx) // already validated
 	pool.enqueueTx(hash, tx)
 
 	// notify other subsystem about the new tx
@@ -538,11 +542,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 
 	// Mark local addresses and journal local transactions
 	if local {
-		pool.locals.add(from)
-		pool.journalTx(from, tx)
+		pool.journalTx(tx)
 	}
 
-	log.Info("Pooled new future transaction", "hash", hash, "from", from)
+	log.Info("Pooled new future transaction", "hash", hash)
 	return nil
 }
 
@@ -560,9 +563,9 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 
 // journalTx adds the specified transaction to the local disk journal if it is
 // deemed to have been sent from a local account.
-func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
-	// Only journal if it's enabled and the transaction is local
-	if pool.journal == nil || !pool.locals.contains(from) {
+func (pool *TxPool) journalTx(tx *types.Transaction) {
+	// Only journal if it's enabled
+	if pool.journal == nil {
 		return
 	}
 	if err := pool.journal.insert(tx); err != nil {
@@ -698,8 +701,8 @@ func (as *accountSet) contains(addr common.Address) bool {
 // containsTx checks if the sender of a given tx is within the set. If the sender
 // cannot be derived, this method returns false.
 func (as *accountSet) containsTx(tx *types.Transaction) bool {
-	if addr, err := types.Sender(as.signer, tx); err == nil {
-		return as.contains(addr)
+	if addrs, err := types.Sender(as.signer, tx); err == nil {
+		return as.contains(addrs[0]) || as.contains(addrs[1])
 	}
 	return false
 }

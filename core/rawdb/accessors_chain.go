@@ -320,3 +320,27 @@ func FindCommonAncestor(db DatabaseReader, a, b *types.Header) *types.Header {
 	}
 	return a
 }
+
+// ReadUTXO return the record from UTXO set storage, or nil if not found or has error
+func ReadUTXO(db DatabaseReader, blockNum uint64, txIdx uint32, outIdx byte) *types.UTXO {
+	data, _ := db.Get(utxoKey(blockNum, txIdx, outIdx))
+	if len(data) == 0 {
+		return nil
+	}
+	v := new(types.UTXO)
+	rlp.DecodeBytes(data, v)
+	return v
+}
+
+// DeleteUTXO remove a utxo record from UTXO set storage
+func DeleteUTXO(db DatabaseDeleter, blockNum uint64, txIdx uint32, outIdx byte) error {
+	return db.Delete(utxoKey(blockNum, txIdx, outIdx))
+}
+
+func WriteUTXO(db DatabaseWriter, v *types.UTXO) error {
+	buf, err := rlp.EncodeToBytes(v)
+	if err != nil {
+		return err
+	}
+	return db.Put(utxoKey(v.BlockNum, v.TxIndex, v.OutIndex), buf)
+}

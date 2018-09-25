@@ -56,6 +56,9 @@ var (
 	preimagePrefix = []byte("secure-key-")      // preimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-") // config prefix for the db
 
+	// "c" means "coin"
+	utxoPrefix = []byte("c") // utxoPrefix + tx hash + output index -> UTXO Set key
+
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
 
@@ -111,6 +114,15 @@ func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 // txLookupKey = txLookupPrefix + hash
 func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
+}
+
+func utxoKey(blockNum uint64, txIdx uint32, outIdx byte) []byte {
+	key := append(utxoPrefix, make([]byte, 13)...)
+	binary.BigEndian.PutUint64(key[1:], blockNum)
+	binary.BigEndian.PutUint32(key[9:], txIdx)
+	key[13] = outIdx
+
+	return key
 }
 
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
