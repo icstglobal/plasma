@@ -8,3 +8,6 @@ httpserver:
 logger:
   # debug,info,warn,error,fatal,panic
   level: debug
+
+cfg:
+    datadir: testdata

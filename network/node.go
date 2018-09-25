@@ -51,8 +51,12 @@ func startRPC() (*RPCServer, error) {
 func startHTTP() (*HTTPServer, error) {
 	log.Info("try to start http server")
 	httpPort := viper.GetInt("httpserver.port")
+	// datadir
+	datadir := viper.GetString("cfg.datadir")
+	cfg := &plasma.DefaultConfig
+	cfg.DataDir = datadir
 
-	plasma, err := plasma.New(&plasma.DefaultConfig)
+	plasma, err := plasma.New(cfg)
 	if err != nil {
 		return nil, err
 	}

@@ -166,7 +166,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, err
 	}
 	// Take ownership of this particular state
-	// go bc.update()
+	go bc.update()
 	return bc, nil
 }
 

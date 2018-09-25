@@ -182,6 +182,7 @@ func CreateDB(config *Config, name string) (ethdb.Database, error) {
 		path = name
 	}
 	path = filepath.Join(config.DataDir, name)
+	fmt.Printf("path, config.DataDir: %v %v\n", path, config.DataDir)
 
 	db, err := ethdb.NewLDBDatabase(path, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
