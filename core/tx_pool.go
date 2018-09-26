@@ -18,11 +18,9 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
-	"reflect"
 	// "reflect"
 	"sync"
 	"time"
@@ -38,40 +36,6 @@ import (
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
-)
-
-var (
-	// ErrInvalidSender is returned if the transaction contains an invalid signature.
-	ErrInvalidSender = errors.New("invalid sender")
-
-	// ErrInsufficientFunds is returned if the total cost of executing a transaction
-	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
-
-	// ErrNegativeValue is a sanity error to ensure noone is able to specify a
-	// transaction with a negative value.
-	ErrNegativeValue = errors.New("negative value")
-
-	// ErrOversizedData is returned if the input data of a transaction is greater
-	// than some meaningful limit a user might use. This is not a consensus error
-	// making the transaction invalid, rather a DOS protection.
-	ErrOversizedData = errors.New("oversized data")
-
-	// ErrTxInNotFound is returned if the tx in is not found by in index
-	ErrTxInNotFound = errors.New("tx in not found")
-
-	// ErrTxOutNotFound is returned if the tx out is not found by out index
-	ErrTxOutNotFound = errors.New("tx out not found")
-
-	// ErrTxOutNotOwned is returned if the tx out to be used is not owned by the tx sender
-	ErrTxOutNotOwned = errors.New("tx out not owned")
-
-	// ErrTxTotalAmountNotEqual is returned if the total amount of tx in and out not equal
-	ErrTxTotalAmountNotEqual = errors.New("total amount of tx ins and outs not equal")
-
-	// ErrorAlreadySpent returns if the utxo as tx in has been spent already
-	ErrorAlreadySpent = errors.New("utxo already spent")
-	// ErrNotEnoughTxFee is returned if the tx fee is not bigger than zero
-	ErrNotEnoughTxFee = errors.New("not enough tx fee")
 )
 
 var (
@@ -110,22 +74,6 @@ const (
 	TxStatusPending
 	TxStatusIncluded
 )
-
-// blockChain provides the state of blockchain and current gas limit to do
-// some pre checks in tx pool and event subscribers.
-type blockChain interface {
-	CurrentBlock() *types.Block
-	GetBlock(hash common.Hash, number uint64) *types.Block
-	GetBlockByNumber(number uint64) *types.Block
-
-	// SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
-}
-
-type utxoSet interface {
-	Get(id types.UTXOID) *types.UTXO
-	Del(id types.UTXOID) error
-	Write(utxo *types.UTXO) error
-}
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
@@ -188,10 +136,11 @@ func (config *TxPoolConfig) sanitize() TxPoolConfig {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config       TxPoolConfig
-	chainconfig  *params.ChainConfig
-	chain        blockChain
-	us           utxoSet
+	config      TxPoolConfig
+	chainconfig *params.ChainConfig
+	chain       BlockReader
+	// us           utxoSet
+	txValidator  TxValidator
 	txFeed       event.Feed
 	scope        event.SubscriptionScope
 	chainHeadCh  chan ChainHeadEvent
@@ -211,7 +160,7 @@ type TxPool struct {
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
-func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain, us utxoSet) *TxPool {
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain BlockReader, validator TxValidator) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
 
@@ -225,7 +174,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		beats:       make(map[common.Address]time.Time),
 		all:         newTxLookup(),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
-		us:          us,
+		txValidator: validator,
 	}
 	pool.locals = newAccountSet(pool.signer)
 	// pool.reset(nil, chain.CurrentBlock().Header())
@@ -465,54 +414,6 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
-// validateTx checks whether a transaction is valid according to the consensus
-// rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *TxPool) validateTx(tx *types.Transaction) error {
-	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
-	if tx.Size() > 32*1024 {
-		return ErrOversizedData
-	}
-
-	if tx.Fee().Cmp(zeroFee) <= 0 {
-		return ErrNotEnoughTxFee
-	}
-
-	// Make sure the transaction is signed properly
-	senders, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
-	}
-
-	ins := tx.GetInsCopy()
-	totalInAmount := new(big.Int)
-	for i, in := range ins {
-		log.WithFields(log.Fields{"blockNum": in.BlockNum, "txIndex": in.TxIndex, "outIndex": in.OutIndex}).Debug("validte in with utxo set")
-		utxo := pool.us.Get(in.ID())
-		// make sure utxo exists and is unspent
-		if utxo == nil {
-			return ErrorAlreadySpent
-		}
-		// the signer should own the unspent tx out
-		if !reflect.DeepEqual(utxo.Owner, senders[i]) {
-			return ErrTxOutNotOwned
-		}
-		totalInAmount = totalInAmount.Add(totalInAmount, utxo.Amount)
-	}
-
-	newOuts := tx.GetOutsCopy()
-	totalOutAmount := new(big.Int)
-	for _, out := range newOuts {
-		totalOutAmount = totalOutAmount.Add(totalOutAmount, out.Amount)
-	}
-	// totalInAmount = totalOutAmount + fee
-	log.Info("totalInAmount, totalOutAmount, fee", totalInAmount, totalOutAmount, tx.Fee())
-	if totalInAmount.Cmp(totalOutAmount.Add(totalOutAmount, tx.Fee())) != 0 {
-		return ErrTxTotalAmountNotEqual
-	}
-
-	return nil
-}
-
 // add validates a transaction and inserts it into the non-executable queue for
 // later pending promotion and execution.
 // If a newly added transaction is marked as local, its sending account will be
@@ -526,7 +427,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 		return fmt.Errorf("known transaction: %x", hash)
 	}
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx); err != nil {
+	if err := pool.txValidator.Validate(tx); err != nil {
 		log.Info("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxCounter.Inc(1)
 		return err

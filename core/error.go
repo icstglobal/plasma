@@ -28,4 +28,39 @@ var (
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
+
+	// ErrInvalidSender is returned if the transaction contains an invalid signature.
+	ErrInvalidSender = errors.New("invalid sender")
+
+	// ErrInsufficientFunds is returned if the total cost of executing a transaction
+	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
+
+	// ErrNegativeValue is a sanity error to ensure noone is able to specify a
+	// transaction with a negative value.
+	ErrNegativeValue = errors.New("negative value")
+
+	// ErrOversizedData is returned if the input data of a transaction is greater
+	// than some meaningful limit a user might use. This is not a consensus error
+	// making the transaction invalid, rather a DOS protection.
+	ErrOversizedData = errors.New("oversized data")
+
+	// ErrTxInNotFound is returned if the tx in is not found by in index
+	ErrTxInNotFound = errors.New("tx in not found")
+
+	// ErrTxOutNotFound is returned if the tx out is not found by out index
+	ErrTxOutNotFound = errors.New("tx out not found")
+
+	// ErrTxOutNotOwned is returned if the tx out to be used is not owned by the tx sender
+	ErrTxOutNotOwned = errors.New("tx out not owned")
+
+	// ErrTxTotalAmountNotEqual is returned if the total amount of tx in and out not equal
+	ErrTxTotalAmountNotEqual = errors.New("total amount of tx ins and outs not equal")
+
+	// ErrorAlreadySpent returns if the utxo as tx in has been spent already
+	ErrorAlreadySpent = errors.New("utxo already spent")
+	// ErrNotEnoughTxFee is returned if the tx fee is not bigger than zero
+	ErrNotEnoughTxFee = errors.New("not enough tx fee")
+
+	// ErrDuplicateSpent returns if the duplicate spent is detected
+	ErrDuplicateSpent = errors.New("duplicate spent")
 )

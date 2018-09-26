@@ -1,14 +1,22 @@
 package core
 
-import "github.com/icstglobal/plasma/core/types"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/icstglobal/plasma/core/types"
+)
 
-// Validator is an interface which defines the standard for block validation. It
+// BlockValidator is an interface which defines the standard for block validation. It
 // is only responsible for validating block contents, as the header validation is
 // done by the specific consensus engines.
 //
-type Validator interface {
+type BlockValidator interface {
 	// ValidateBody validates the given block's content.
 	ValidateBody(block *types.Block) error
+}
+
+// TxValidator is an interface which defines the standard for transaction validation
+type TxValidator interface {
+	Validate(tx *types.Transaction) error
 }
 
 // Processor is an interface for processing blocks using a given initial state.
@@ -19,4 +27,28 @@ type Validator interface {
 // failed.
 type Processor interface {
 	Process(block *types.Block) (uint64, error)
+}
+
+// BlockReader is an interface for block reading
+type BlockReader interface {
+	HasBlock(hash common.Hash, blockNum uint64) bool
+	CurrentBlock() *types.Block
+	GetBlock(hash common.Hash, number uint64) *types.Block
+	GetBlockByNumber(number uint64) *types.Block
+}
+
+// UtxoReaderDeleter combines both UtxoReader and UtxoDeleter interfaces
+type UtxoReaderDeleter interface {
+	UtxoReader
+	UtxoDeleter
+}
+
+// UtxoReader defines an interface to read utxo set data
+type UtxoReader interface {
+	Get(id types.UTXOID) *types.UTXO
+}
+
+// UtxoDeleter defines an interface to delete utxo
+type UtxoDeleter interface {
+	Del(id types.UTXOID) error
 }
