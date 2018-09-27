@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	// "github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
+	log "github.com/sirupsen/logrus"
 	// "github.com/ethereum/go-ethereum/miner"
 	// "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -182,7 +182,7 @@ func CreateDB(config *Config, name string) (ethdb.Database, error) {
 		path = name
 	}
 	path = filepath.Join(config.DataDir, name)
-	log.Debug("path, config.DataDir: %v %v\n", path, config.DataDir)
+	log.Debugf("path, config.DataDir: %v %v\n", path, config.DataDir)
 
 	db, err := ethdb.NewLDBDatabase(path, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {

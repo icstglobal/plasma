@@ -15,11 +15,11 @@ import (
 	// "github.com/ethereum/go-ethereum/core/state"
 	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/icstglobal/plasma/core/rawdb"
 	"github.com/icstglobal/plasma/core/types"
+	log "github.com/sirupsen/logrus"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
