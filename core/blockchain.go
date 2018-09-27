@@ -115,9 +115,9 @@ type BlockChain struct {
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 
-	engine    consensus.Engine
-	processor Processor // block processor interface
-	validator Validator // block and state validator interface
+	engine         consensus.Engine
+	processor      Processor      // block processor interface
+	blockValidator BlockValidator // block and state validator interface
 
 	badBlocks *lru.Cache // Bad block cache
 }
@@ -151,7 +151,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:       engine,
 		badBlocks:    badBlocks,
 	}
-	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.getProcInterrupt)
@@ -298,17 +297,17 @@ func (bc *BlockChain) SetProcessor(processor Processor) {
 }
 
 // SetValidator sets the validator which is used to validate incoming blocks.
-func (bc *BlockChain) SetValidator(validator Validator) {
+func (bc *BlockChain) SetValidator(validator BlockValidator) {
 	bc.procmu.Lock()
 	defer bc.procmu.Unlock()
-	bc.validator = validator
+	bc.blockValidator = validator
 }
 
 // Validator returns the current validator.
-func (bc *BlockChain) Validator() Validator {
+func (bc *BlockChain) Validator() BlockValidator {
 	bc.procmu.RLock()
 	defer bc.procmu.RUnlock()
-	return bc.validator
+	return bc.blockValidator
 }
 
 // Processor returns the current processor.
@@ -473,7 +472,6 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 // GetBlock retrieves a block from the database by hash and number,
 // caching it if found.
 func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	// debug.PrintStack()
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block.(*types.Block)
@@ -854,7 +852,6 @@ Chain config: %v
 
 Number: %v
 Hash: 0x%x
-%v
 
 Error: %v
 ##############################

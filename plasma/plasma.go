@@ -5,33 +5,23 @@ import (
 	"math/big"
 	"runtime"
 	"sync"
-	// "sync/atomic"
+
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	// "github.com/ethereum/go-ethereum/consensus"
-	"github.com/icstglobal/plasma/consensus"
-	// "github.com/ethereum/go-ethereum/core"
-	// "github.com/ethereum/go-ethereum/core/bloombits"
-	// "github.com/ethereum/go-ethereum/core/rawdb"
-	// "github.com/ethereum/go-ethereum/core/vm"
-	// "github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/icstglobal/plasma/core"
-	// "github.com/ethereum/go-ethereum/eth/filters"
-	// "github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	// "github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/icstglobal/plasma/consensus"
+	"github.com/icstglobal/plasma/core"
+	"github.com/icstglobal/plasma/core/types"
+
 	log "github.com/sirupsen/logrus"
-	// "github.com/ethereum/go-ethereum/miner"
-	// "github.com/ethereum/go-ethereum/node"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"path/filepath"
-	// "github.com/icstglobal/plasma/network"
-	// "github.com/ethereum/go-ethereum/rpc"
 )
 
 type LesServer interface {
@@ -96,6 +86,7 @@ func New(config *Config) (*Plasma, error) {
 	if err != nil {
 		return nil, err
 	}
+	us := core.NewUTXOSet(chainDb)
 	chainConfig, _, genesisErr := core.SetupGenesisBlock(chainDb, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
@@ -126,6 +117,8 @@ func New(config *Config) (*Plasma, error) {
 	if err != nil {
 		return nil, err
 	}
+	signer := types.NewEIP155Signer(eth.chainConfig.ChainID)
+	eth.blockchain.SetValidator(core.NewUtxoBlockValidator(signer, eth.blockchain, us))
 	// Rewind the chain in case of an incompatible config upgrade.
 	// if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 	// log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -138,7 +131,10 @@ func New(config *Config) (*Plasma, error) {
 		// config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
 	}
 	fmt.Printf("chainConfig: %v\n", eth.chainConfig)
-	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
+
+	log.Debug("try to init tx pool")
+	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(eth.chainConfig.ChainID), us)
+	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain, txValidator)
 	eth.operator = core.NewOperator(eth, nil)
 	eth.operator.Start()
 
