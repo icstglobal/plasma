@@ -45,11 +45,11 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 
 	totalInAmount := new(big.Int)
 	for i, in := range ins {
-		log.WithFields(log.Fields{"blockNum": in.BlockNum, "txIndex": in.TxIndex, "outIndex": in.OutIndex}).Debug("validte in with utxo set")
+		log.WithFields(log.Fields{"blockNum": in.BlockNum, "txIndex": in.TxIndex, "outIndex": in.OutIndex}).Debug("validate tx in with utxo set")
 		utxo := v.utxoReader.Get(in.ID())
 		// make sure utxo exists and is unspent
 		if utxo == nil {
-			return ErrorAlreadySpent
+			return ErrAlreadySpent
 		}
 		// the signer should own the unspent tx out
 		if !reflect.DeepEqual(utxo.Owner, senders[i]) {
@@ -61,6 +61,9 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 	newOuts := tx.GetOutsCopy()
 	totalOutAmount := new(big.Int)
 	for _, out := range newOuts {
+		if out.Amount.Cmp(big0) <= 0 {
+			return ErrInvalidOutputAmount
+		}
 		totalOutAmount = totalOutAmount.Add(totalOutAmount, out.Amount)
 	}
 	// totalInAmount = totalOutAmount + fee

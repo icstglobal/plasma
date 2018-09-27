@@ -62,7 +62,8 @@ var (
 )
 
 var (
-	zeroFee = new(big.Int)
+	big0    = new(big.Int)
+	zeroFee = big0
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.

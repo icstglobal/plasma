@@ -56,11 +56,14 @@ var (
 	// ErrTxTotalAmountNotEqual is returned if the total amount of tx in and out not equal
 	ErrTxTotalAmountNotEqual = errors.New("total amount of tx ins and outs not equal")
 
-	// ErrorAlreadySpent returns if the utxo as tx in has been spent already
-	ErrorAlreadySpent = errors.New("utxo already spent")
+	// ErrAlreadySpent returns if the utxo as tx in has been spent already
+	ErrAlreadySpent = errors.New("utxo already spent")
 	// ErrNotEnoughTxFee is returned if the tx fee is not bigger than zero
 	ErrNotEnoughTxFee = errors.New("not enough tx fee")
 
 	// ErrDuplicateSpent returns if the duplicate spent is detected
 	ErrDuplicateSpent = errors.New("duplicate spent")
+
+	// ErrInvalidOutputAmount returns if the tx output has an amount less than 0
+	ErrInvalidOutputAmount = errors.New("invalid tx output amount, it should be bigger than zero")
 )
