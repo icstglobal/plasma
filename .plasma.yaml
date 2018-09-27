@@ -8,3 +8,7 @@ httpserver:
 logger:
   # debug,info,warn,error,fatal,panic
   level: debug
+
+plasma:
+    datadir: testdata
+    networkId: 1

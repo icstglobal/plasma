@@ -40,6 +40,7 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
+	DataDir: "",
 }
 
 func init() {

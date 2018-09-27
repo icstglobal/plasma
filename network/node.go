@@ -52,7 +52,13 @@ func startHTTP() (*HTTPServer, error) {
 	log.Info("try to start http server")
 	httpPort := viper.GetInt("httpserver.port")
 
-	plasma, err := plasma.New(&plasma.DefaultConfig)
+	datadir := viper.GetString("plasma.datadir")
+	networkId := viper.GetInt64("plasma.networkId")
+	cfg := &plasma.DefaultConfig
+	cfg.DataDir = datadir
+	cfg.NetworkId = uint64(networkId)
+
+	plasma, err := plasma.New(cfg)
 	if err != nil {
 		return nil, err
 	}

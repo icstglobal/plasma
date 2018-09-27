@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/icstglobal/plasma/core/types"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

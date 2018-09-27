@@ -14,9 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -288,7 +288,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if c.DataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
-			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
+			log.Errorf(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
 		}
 		return key
 	}
@@ -300,7 +300,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	// No persistent key found, generate and store a new one.
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
+		log.Errorf(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
 	instanceDir := filepath.Join(c.DataDir, c.name())
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
@@ -309,7 +309,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	}
 	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
-		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+		log.Errorf(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
 	return key
 }
