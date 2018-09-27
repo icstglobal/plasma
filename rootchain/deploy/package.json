@@ -4,7 +4,9 @@
   "description": "",
   "main": "deploy.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "node deploy.js compile",
+    "deploy": "node deploy.js deploy",
+    "start": "node deploy"
   },
   "author": "",
   "license": "ISC",
