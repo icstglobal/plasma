@@ -150,6 +150,7 @@ func New(config *Config) (*Plasma, error) {
 	// gpoParams.Default = config.GasPrice
 	// }
 	// eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
+	// initChain
 
 	return eth, nil
 }

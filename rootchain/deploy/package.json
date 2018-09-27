@@ -1,0 +1,17 @@
+{
+  "name": "deploy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "deploy.js",
+  "scripts": {
+    "compile": "node deploy.js compile",
+    "deploy": "node deploy.js deploy",
+    "start": "node deploy"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "solc": "^0.4.25",
+    "web3": "^0.20.6"
+  }
+}
