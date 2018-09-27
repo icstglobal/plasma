@@ -16,3 +16,6 @@ vendor
 
 .DS_Store
 *.bak
+
+rootchain/deploy/contract_data
+rootchain/deploy/node_modules
