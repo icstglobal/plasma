@@ -9,5 +9,6 @@ logger:
   # debug,info,warn,error,fatal,panic
   level: debug
 
-cfg:
+plasma:
     datadir: testdata
+    networkId: 1
