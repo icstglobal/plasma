@@ -2,5 +2,6 @@ package httphandlers
 
 var (
 	// Tx handles request for transactions
-	Tx TxHandler
+	Tx     TxHandler
+	Action ActionHandler
 )
