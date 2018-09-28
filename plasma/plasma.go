@@ -22,6 +22,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/icstglobal/go-icst/chain"
+	"github.com/icstglobal/go-icst/chain/eth"
 )
 
 type LesServer interface {
@@ -93,7 +97,7 @@ func New(config *Config) (*Plasma, error) {
 	}
 	// log.Info("Initialised chain configuration", "config", chainConfig)
 
-	eth := &Plasma{
+	pls := &Plasma{
 		config:      config,
 		chainDb:     chainDb,
 		chainConfig: chainConfig,
@@ -113,30 +117,30 @@ func New(config *Config) (*Plasma, error) {
 	var (
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine)
+	pls.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, pls.chainConfig, pls.engine)
 	if err != nil {
 		return nil, err
 	}
-	signer := types.NewEIP155Signer(eth.chainConfig.ChainID)
-	eth.blockchain.SetValidator(core.NewUtxoBlockValidator(signer, eth.blockchain, us))
+	signer := types.NewEIP155Signer(pls.chainConfig.ChainID)
+	pls.blockchain.SetValidator(core.NewUtxoBlockValidator(signer, pls.blockchain, us))
 	// Rewind the chain in case of an incompatible config upgrade.
 	// if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 	// log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-	// eth.blockchain.SetHead(compat.RewindTo)
+	// pls.blockchain.SetHead(compat.RewindTo)
 	// rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	// }
-	// eth.bloomIndexer.Start(eth.blockchain)
+	// pls.bloomIndexer.Start(pls.blockchain)
 
 	if config.TxPool.Journal != "" {
 		// config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
 	}
-	fmt.Printf("chainConfig: %v\n", eth.chainConfig)
+	fmt.Printf("chainConfig: %v\n", pls.chainConfig)
 
 	log.Debug("try to init tx pool")
-	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(eth.chainConfig.ChainID), us)
-	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain, txValidator)
-	eth.operator = core.NewOperator(eth.BlockChain(), eth.TxPool(), config.Operbase)
-	eth.operator.Start()
+	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(pls.chainConfig.ChainID), us)
+	pls.txPool = core.NewTxPool(config.TxPool, pls.chainConfig, pls.blockchain, txValidator)
+	pls.operator = core.NewOperator(pls, nil)
+	pls.operator.Start()
 
 	// if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 	// return nil, err
@@ -151,8 +155,18 @@ func New(config *Config) (*Plasma, error) {
 	// }
 	// eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	// initChain
+	//dial eth chain
+	url := config.ChainUrl
+	client, err := ethclient.Dial(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect eth rpc endpoint {%v}, err is:%v", url, err)
+	}
+	blc := eth.NewChainEthereum(client)
+	// set contract addr
+	eth.RootChainAddr = config.CxAddr
+	chain.Set(chain.Eth, blc)
 
-	return eth, nil
+	return pls, nil
 }
 
 func makeExtraData(extra []byte) []byte {

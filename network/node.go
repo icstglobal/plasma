@@ -54,9 +54,16 @@ func startHTTP() (*HTTPServer, error) {
 
 	datadir := viper.GetString("plasma.datadir")
 	networkId := viper.GetInt64("plasma.networkId")
+	chainType := viper.GetInt("plasma.type")
+	chainUrl := viper.GetString("plasma.url")
+	cxAddr := viper.GetString("plasma.cxAddr")
+
 	cfg := &plasma.DefaultConfig
 	cfg.DataDir = datadir
 	cfg.NetworkId = uint64(networkId)
+	cfg.ChainType = chainType
+	cfg.ChainUrl = chainUrl
+	cfg.CxAddr = cxAddr
 
 	plasma, err := plasma.New(cfg)
 	if err != nil {
