@@ -3,6 +3,11 @@ package network
 import (
 	// "github.com/icstglobal/plasma/core"
 	// "github.com/ethereum/go-ethereum/node"
+	"encoding/json"
+	// "fmt"
+	"os"
+	"reflect"
+
 	"github.com/icstglobal/plasma/plasma"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
@@ -13,6 +18,11 @@ import (
 type Node struct {
 	rpc  *RPCServer
 	http *HTTPServer
+}
+
+type CxData struct {
+	Abi interface{} `json:"abi"`
+	Bin string      `json:"bytecode"`
 }
 
 //Start the node
@@ -57,6 +67,7 @@ func startHTTP() (*HTTPServer, error) {
 	chainType := viper.GetInt("plasma.type")
 	chainUrl := viper.GetString("plasma.url")
 	cxAddr := viper.GetString("plasma.cxAddr")
+	cxFileName := viper.GetString("plasma.cxFileName")
 
 	cfg := &plasma.DefaultConfig
 	cfg.DataDir = datadir
@@ -64,6 +75,25 @@ func startHTTP() (*HTTPServer, error) {
 	cfg.ChainType = chainType
 	cfg.ChainUrl = chainUrl
 	cfg.CxAddr = cxAddr
+	// read abi from json
+	cxData := new(CxData)
+	file, err := os.Open(cxFileName)
+	defer file.Close()
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&cxData)
+	if err != nil {
+		return nil, err
+	}
+	abiStr, err := json.Marshal(cxData.Abi)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.CxAbi = string(abiStr)
+	log.Debugf("abi: %v %v\n", cfg.CxAbi, reflect.TypeOf(cxData.Abi))
 
 	plasma, err := plasma.New(cfg)
 	if err != nil {

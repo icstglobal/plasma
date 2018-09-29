@@ -48,7 +48,7 @@ func (hs *HTTPServer) initMux() *http.ServeMux {
 	mux.HandleFunc("/tx/new", httphandlers.Tx.New(hs.Plasma))
 	mux.HandleFunc("/tx/sign", httphandlers.Tx.Sign())
 
-	mux.HandleFunc("/deposit", httphandlers.Action.Deposit())
-	mux.HandleFunc("/aftersign", httphandlers.Action.AfterSign())
+	mux.HandleFunc("/deposit", httphandlers.Action.Deposit(hs.Plasma))
+	mux.HandleFunc("/aftersign", httphandlers.Action.AfterSign(hs.Plasma))
 	return mux
 }
