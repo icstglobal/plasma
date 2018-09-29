@@ -37,7 +37,7 @@ type BlockReader interface {
 	GetBlockByNumber(number uint64) *types.Block
 }
 
-// UtxoReaderDeleter combines both UtxoReader and UtxoDeleter interfaces
+// UtxoReaderWriter combines both UtxoReader and UtxoDeleter interfaces
 type UtxoReaderWriter interface {
 	UtxoReader
 	UtxoWriter

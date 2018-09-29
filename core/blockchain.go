@@ -45,6 +45,7 @@ import (
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 
+	// ErrNoGenesis returns when no genesis block found
 	ErrNoGenesis = errors.New("Genesis not found in chain")
 )
 
@@ -549,15 +550,6 @@ func (bc *BlockChain) procFutureBlocks() {
 	}
 }
 
-// WriteStatus status of write
-type WriteStatus byte
-
-const (
-	NonStatTy WriteStatus = iota
-	CanonStatTy
-	SideStatTy
-)
-
 // Rollback is designed to remove a chain of links from the database that aren't
 // certain enough to be valid.
 func (bc *BlockChain) Rollback(chain []common.Hash) {
@@ -885,7 +877,7 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		bc.mu.Lock()
 		defer bc.mu.Unlock()
 
-		_, err := bc.hc.WriteHeader(header)
+		err := bc.hc.WriteHeader(header)
 		return err
 	}
 
@@ -908,7 +900,7 @@ func (bc *BlockChain) writeHeader(header *types.Header) error {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	_, err := bc.hc.WriteHeader(header)
+	err := bc.hc.WriteHeader(header)
 	return err
 }
 

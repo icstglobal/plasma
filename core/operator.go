@@ -58,51 +58,54 @@ func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address) *Operat
 	return oper
 }
 
-func (self *Operator) SetOperbase(operbase common.Address) {
-	self.Addr = operbase
+// SetOperbase changes operator's current address
+func (o *Operator) SetOperbase(operbase common.Address) {
+	o.Addr = operbase
 }
 
-func (self *Operator) Start() {
-	go self.start()
+// Start the operator to do mining
+func (o *Operator) Start() {
+	go o.start()
 }
 
-func (self *Operator) start() {
+func (o *Operator) start() {
 	ticker := time.NewTicker(time.Second * rate)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-self.quit:
+		case <-o.quit:
 			return
 		case <-ticker.C:
-			if txs := self.txPool.Content(); len(txs) == 0 {
+			if txs := o.txPool.Content(); len(txs) == 0 {
 				continue
 			}
 			fmt.Printf("%v\n", "operator txs..")
-			self.Seal()
+			o.Seal()
 		}
 	}
 }
 
-func (self *Operator) Stop() {
-	close(self.quit)
+// Stop sends a sigal to stop the operator
+func (o *Operator) Stop() {
+	close(o.quit)
 }
 
 // Seal get txs from txpool and construct block, then seal the block
-func (self *Operator) Seal() error {
-	block := self.constructBlock()
-	if err := self.chain.WriteBlock(block); err != nil {
+func (o *Operator) Seal() error {
+	block := o.constructBlock()
+	if err := o.chain.WriteBlock(block); err != nil {
 		return err
 	}
-	self.chain.ReplaceHead(block)
-	for txIdx, v := range block.Transactions() {
-		for _, in := range v.GetInsCopy() {
-			if err := self.utxoRD.Del(in.ID()); err != nil {
-				// TODO:need recover here
+	o.chain.ReplaceHead(block)
+	for txIdx, tx := range block.Transactions() {
+		for _, in := range tx.GetInsCopy() {
+			if err := o.utxoRD.Del(in.ID()); err != nil {
+				// TODO:need recover her:e
 				// log error and stop processing
 				log.WithField("utxo", *in).Fatal("failed to delete utxo")
 			}
 		}
-		for outIdx, out := range v.GetOutsCopy() {
+		for outIdx, out := range tx.GetOutsCopy() {
 			utxo := types.UTXO{
 				UTXOID: types.UTXOID{
 					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
@@ -110,23 +113,23 @@ func (self *Operator) Seal() error {
 				Amount: out.Amount,
 				Owner:  out.Owner,
 			}
-			if err := self.utxoRD.Put(&utxo); err != nil {
+			if err := o.utxoRD.Put(&utxo); err != nil {
 				//TODO: need recover here
 				// log err and stop processing
 				log.WithField("utxo", utxo).Fatal("failed to write utxo")
 			}
 		}
-		hash := v.Hash()
-		self.txPool.removeTx(hash, true)
+		hash := tx.Hash()
+		o.txPool.removeTx(hash, true)
 	}
 
 	return nil
 }
 
-func (self *Operator) constructBlock() *types.Block {
+func (o *Operator) constructBlock() *types.Block {
 	// header
 	tstart := time.Now()
-	parent := self.chain.CurrentBlock()
+	parent := o.chain.CurrentBlock()
 
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
@@ -142,18 +145,18 @@ func (self *Operator) constructBlock() *types.Block {
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
-		Coinbase:   self.Addr,
+		Coinbase:   o.Addr,
 		Number:     num.Add(num, common.Big1),
 		Time:       big.NewInt(tstamp),
 	}
 	// txs
-	txs := self.txPool.Content()
+	txs := o.txPool.Content()
 
 	return types.NewBlock(header, txs)
 }
 
 // SubmitBlock write block hash to root chain
-func (self *Operator) SubmitBlock() error {
+func (o *Operator) SubmitBlock() error {
 	// todo
 	return nil
 }
