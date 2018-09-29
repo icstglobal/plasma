@@ -5,11 +5,18 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/icstglobal/go-icst/chain"
+	"github.com/icstglobal/plasma/plasma"
 	log "github.com/sirupsen/logrus"
 	"math/big"
 	"net/http"
+)
+
+const (
+	ContractType      = "Plasma"
+	DepositMethodName = "deposit"
 )
 
 // ActionHandler is a container for tx related handlers
@@ -26,7 +33,7 @@ type DepositResponse struct {
 }
 
 // deposit icst to root chain and create block in child chain
-func (action ActionHandler) Deposit() http.HandlerFunc {
+func (action ActionHandler) Deposit(plasma *plasma.Plasma) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		log.Debug("do deposit")
 		defer req.Body.Close()
@@ -62,10 +69,12 @@ func (action ActionHandler) Deposit() http.HandlerFunc {
 			return
 		}
 
+		callData := map[string]interface{}{}
 		// call rootchain contract deposit
-		tx, err := blc.Deposit(context.Background(), from, big.NewInt(int64(depositReq.Amount)))
+		tx, err := blc.CallWithAbi(context.Background(), from, ContractType, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(depositReq.Amount)), callData, plasma.Config().CxAbi)
 		if err != nil {
 			msg := "blc.Deposit Error!"
+			log.Error(err)
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
@@ -89,7 +98,7 @@ type AfterSignResponse struct {
 	Res bool `json:"res"`
 }
 
-func (action ActionHandler) AfterSign() http.HandlerFunc {
+func (action ActionHandler) AfterSign(plasma *plasma.Plasma) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		log.Debug("do aftersign")
 		defer req.Body.Close()
@@ -121,8 +130,9 @@ func (action ActionHandler) AfterSign() http.HandlerFunc {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
+		callData := map[string]interface{}{}
 		// call rootchain contract deposit
-		tx, err := blc.Deposit(context.Background(), from, big.NewInt(int64(_req.Amount)))
+		tx, err := blc.CallWithAbi(context.Background(), from, ContractType, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(_req.Amount)), callData, plasma.Config().CxAbi)
 		if err != nil {
 			msg := "blc.Deposit Error!"
 			http.Error(w, msg, http.StatusInternalServerError)

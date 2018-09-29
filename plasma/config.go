@@ -96,6 +96,7 @@ type Config struct {
 	ChainType int
 	ChainUrl  string
 	CxAddr    string
+	CxAbi     string
 }
 
 type configMarshaling struct {

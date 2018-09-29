@@ -264,6 +264,7 @@ func (s *Plasma) ChainDb() ethdb.Database           { return s.chainDb }
 func (s *Plasma) IsListening() bool                 { return true } // Always listening
 // func (s *Plasma) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Plasma) NetVersion() uint64 { return s.networkID }
+func (s *Plasma) Config() *Config    { return s.config }
 
 // func (s *Plasma) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
