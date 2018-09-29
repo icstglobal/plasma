@@ -17,13 +17,12 @@
 package core
 
 import (
-	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/icstglobal/plasma/core/types"
 	log "github.com/sirupsen/logrus"
 )
@@ -32,31 +31,29 @@ const (
 	rate = 2
 )
 
-type Plasma interface {
-	BlockChain() *BlockChain
-	TxPool() *TxPool
-	ChainDb() ethdb.Database
-	Operbase() common.Address
-}
-
 // Operator a key element in plasma
 // 1. seal a block
 // 2. commit a block hash
 // 3.
 type Operator struct {
-	Addr       common.Address
-	PrivateKey *ecdsa.PrivateKey
-	quit       chan struct{} // quit channel
-	plasma     Plasma
+	Addr common.Address
+	// PrivateKey *ecdsa.PrivateKey
+
+	chain  *BlockChain
+	txPool *TxPool
+	utxoRD UtxoReaderWriter
+
+	quit chan struct{} // quit channel
 }
 
 // NewOperator creates a new operator
-func NewOperator(plasma Plasma, privateKey *ecdsa.PrivateKey) *Operator {
+func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address) *Operator {
 	oper := &Operator{
-		plasma:     plasma,
-		Addr:       plasma.Operbase(),
-		PrivateKey: privateKey,
-		quit:       make(chan struct{}),
+		Addr: opAddr,
+		// PrivateKey: privateKey,
+		chain:  chain,
+		txPool: pool,
+		quit:   make(chan struct{}),
 	}
 	return oper
 }
@@ -77,7 +74,7 @@ func (self *Operator) start() {
 		case <-self.quit:
 			return
 		case <-ticker.C:
-			if txs := self.plasma.TxPool().Content(); len(txs) == 0 {
+			if txs := self.txPool.Content(); len(txs) == 0 {
 				continue
 			}
 			fmt.Printf("%v\n", "operator txs..")
@@ -93,12 +90,34 @@ func (self *Operator) Stop() {
 // Seal get txs from txpool and construct block, then seal the block
 func (self *Operator) Seal() error {
 	block := self.constructBlock()
-	self.plasma.BlockChain().WriteBlock(block)
-	self.plasma.BlockChain().ReplaceHead(block)
-	for _, v := range block.Transactions() {
-		fmt.Printf("%v\n", v)
+	if err := self.chain.WriteBlock(block); err != nil {
+		return err
+	}
+	self.chain.ReplaceHead(block)
+	for txIdx, v := range block.Transactions() {
+		for _, in := range v.GetInsCopy() {
+			if err := self.utxoRD.Del(in.ID()); err != nil {
+				// TODO:need recover here
+				// log error and stop processing
+				log.WithField("utxo", *in).Fatal("failed to delete utxo")
+			}
+		}
+		for outIdx, out := range v.GetOutsCopy() {
+			utxo := types.UTXO{
+				UTXOID: types.UTXOID{
+					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
+				},
+				Amount: out.Amount,
+				Owner:  out.Owner,
+			}
+			if err := self.utxoRD.Put(&utxo); err != nil {
+				//TODO: need recover here
+				// log err and stop processing
+				log.WithField("utxo", utxo).Fatal("failed to write utxo")
+			}
+		}
 		hash := v.Hash()
-		self.plasma.TxPool().removeTx(hash, true)
+		self.txPool.removeTx(hash, true)
 	}
 
 	return nil
@@ -107,7 +126,7 @@ func (self *Operator) Seal() error {
 func (self *Operator) constructBlock() *types.Block {
 	// header
 	tstart := time.Now()
-	parent := self.plasma.BlockChain().CurrentBlock()
+	parent := self.chain.CurrentBlock()
 
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
@@ -128,7 +147,7 @@ func (self *Operator) constructBlock() *types.Block {
 		Time:       big.NewInt(tstamp),
 	}
 	// txs
-	txs := self.plasma.TxPool().Content()
+	txs := self.txPool.Content()
 
 	return types.NewBlock(header, txs)
 }
