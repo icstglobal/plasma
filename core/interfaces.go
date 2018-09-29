@@ -37,10 +37,10 @@ type BlockReader interface {
 	GetBlockByNumber(number uint64) *types.Block
 }
 
-// UtxoReaderDeleter combines both UtxoReader and UtxoDeleter interfaces
-type UtxoReaderDeleter interface {
+// UtxoReaderWriter combines both UtxoReader and UtxoDeleter interfaces
+type UtxoReaderWriter interface {
 	UtxoReader
-	UtxoDeleter
+	UtxoWriter
 }
 
 // UtxoReader defines an interface to read utxo set data
@@ -48,7 +48,8 @@ type UtxoReader interface {
 	Get(id types.UTXOID) *types.UTXO
 }
 
-// UtxoDeleter defines an interface to delete utxo
-type UtxoDeleter interface {
+// UtxoWriter defines an interface to delete utxo
+type UtxoWriter interface {
 	Del(id types.UTXOID) error
+	Put(v *types.UTXO) error
 }
