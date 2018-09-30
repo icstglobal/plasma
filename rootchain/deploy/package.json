@@ -1,0 +1,19 @@
+{
+  "name": "deploy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "deploy.js",
+  "scripts": {
+    "compile": "node deploy.js compile",
+    "deploy": "node deploy.js deploy",
+    "start": "node deploy"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "ethereumjs-util": "^5.2.0",
+    "solc": "^0.4.25",
+    "web3": "^0.20.6"
+  }
+}

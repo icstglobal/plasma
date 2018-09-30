@@ -5,13 +5,10 @@ import (
 	"math/big"
 	"os"
 	"os/user"
-	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/params"
@@ -20,14 +17,7 @@ import (
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
 var DefaultConfig = Config{
-	SyncMode: downloader.FastSync,
-	Ethash: ethash.Config{
-		CacheDir:       "ethash",
-		CachesInMem:    2,
-		CachesOnDisk:   3,
-		DatasetsInMem:  1,
-		DatasetsOnDisk: 2,
-	},
+	SyncMode:      downloader.FastSync,
 	NetworkId:     1,
 	LightPeers:    100,
 	DatabaseCache: 768,
@@ -40,7 +30,10 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
-	DataDir: "",
+	DataDir:   "",
+	ChainType: 0,
+	ChainUrl:  "",
+	CxAddr:    "",
 }
 
 func init() {
@@ -50,12 +43,7 @@ func init() {
 			home = user.HomeDir
 		}
 	}
-	if runtime.GOOS == "windows" {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
-	} else {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
-		DefaultConfig.Operbase = common.HexToAddress("85d6e595a3e64d3353b888bc49ee27f1b9f2a656")
-	}
+	DefaultConfig.Operbase = common.HexToAddress("85d6e595a3e64d3353b888bc49ee27f1b9f2a656")
 }
 
 //go:generate gencodec -type Config -field-override configMarshaling -formats toml -out gen_config.go
@@ -87,9 +75,6 @@ type Config struct {
 	ExtraData    []byte         `toml:",omitempty"`
 	GasPrice     *big.Int
 
-	// Ethash options
-	Ethash ethash.Config
-
 	// Transaction pool options
 	TxPool core.TxPoolConfig
 
@@ -107,6 +92,11 @@ type Config struct {
 	// databases or flat files. This enables ephemeral nodes which can fully reside
 	// in memory.
 	DataDir string
+
+	ChainType int
+	ChainUrl  string
+	CxAddr    string
+	CxAbi     string
 }
 
 type configMarshaling struct {

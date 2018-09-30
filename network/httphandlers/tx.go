@@ -52,5 +52,4 @@ func (th TxHandler) Sign() http.HandlerFunc {
 		//TODO:
 		log.WithField("url", req.URL).WithField("method", req.Method).Debug("handle http request")
 	}
-
 }
