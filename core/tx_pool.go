@@ -66,16 +66,6 @@ var (
 	zeroFee = big0
 )
 
-// TxStatus is the current status of a transaction as seen by the pool.
-type TxStatus uint
-
-const (
-	TxStatusUnknown TxStatus = iota
-	TxStatusQueued
-	TxStatusPending
-	TxStatusIncluded
-)
-
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
 	NoLocals  bool          // Whether local transaction handling should be disabled

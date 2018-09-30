@@ -45,6 +45,7 @@ import (
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 
+	// ErrNoGenesis returns when no genesis block found
 	ErrNoGenesis = errors.New("Genesis not found in chain")
 )
 
@@ -303,13 +304,6 @@ func (bc *BlockChain) SetValidator(validator BlockValidator) {
 	bc.blockValidator = validator
 }
 
-// Validator returns the current validator.
-func (bc *BlockChain) Validator() BlockValidator {
-	bc.procmu.RLock()
-	defer bc.procmu.RUnlock()
-	return bc.blockValidator
-}
-
 // Processor returns the current processor.
 func (bc *BlockChain) Processor() Processor {
 	bc.procmu.RLock()
@@ -556,15 +550,6 @@ func (bc *BlockChain) procFutureBlocks() {
 	}
 }
 
-// WriteStatus status of write
-type WriteStatus byte
-
-const (
-	NonStatTy WriteStatus = iota
-	CanonStatTy
-	SideStatTy
-)
-
 // Rollback is designed to remove a chain of links from the database that aren't
 // certain enough to be valid.
 func (bc *BlockChain) Rollback(chain []common.Hash) {
@@ -594,11 +579,23 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 var lastWrite uint64
 
 // WriteBlock writes only the block and its metadata to the database,
-// up to the point where they exceed the canonical total difficulty.
+// The block body will be validated first.
 func (bc *BlockChain) WriteBlock(block *types.Block) (err error) {
+	log.WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash()}).
+		Debug("BlockChain.WriteBlock: validate block before actual write")
+
+	if err := bc.blockValidator.ValidateBody(block); err != nil {
+		log.WithError(err).
+			WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash()}).
+			Warn("BlockChain.WriteBlock: invalid block body")
+		return err
+	}
+
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
+	//TODO: db should returns error or not to incidate db operation status
+	//so that we know if inputs used can be remove from UTXO set
 	rawdb.WriteBlock(bc.db, block)
 
 	return nil
@@ -681,9 +678,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, error
 		bstart := time.Now()
 
 		err := <-results
-		if err == nil {
-			err = bc.Validator().ValidateBody(block)
-		}
 		switch {
 		case err == ErrKnownBlock:
 			// Block and state both already known. However if the current block is below
@@ -883,7 +877,7 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		bc.mu.Lock()
 		defer bc.mu.Unlock()
 
-		_, err := bc.hc.WriteHeader(header)
+		err := bc.hc.WriteHeader(header)
 		return err
 	}
 
@@ -906,7 +900,7 @@ func (bc *BlockChain) writeHeader(header *types.Header) error {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	_, err := bc.hc.WriteHeader(header)
+	err := bc.hc.WriteHeader(header)
 	return err
 }
 
