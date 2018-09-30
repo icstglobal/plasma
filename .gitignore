@@ -19,3 +19,5 @@ vendor
 
 rootchain/deploy/contract_data
 rootchain/deploy/node_modules
+transactions.rlp
+testdata

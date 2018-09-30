@@ -64,6 +64,7 @@ func (action ActionHandler) Deposit(plasma *plasma.Plasma) http.HandlerFunc {
 		var blc chain.Chain
 		blc, err = chain.Get(chain.Eth)
 		if err != nil {
+			log.Error(err)
 			msg := "can not find eth chain!"
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
@@ -120,6 +121,7 @@ func (action ActionHandler) AfterSign(plasma *plasma.Plasma) http.HandlerFunc {
 		var blc chain.Chain
 		blc, err := chain.Get(chain.Eth)
 		if err != nil {
+			log.Error(err)
 			msg := "can not find eth chain!"
 			http.Error(w, msg, http.StatusInternalServerError)
 			return

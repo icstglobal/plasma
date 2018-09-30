@@ -22,10 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/icstglobal/go-icst/chain"
-	"github.com/icstglobal/go-icst/chain/eth"
 )
 
 type LesServer interface {
@@ -70,6 +66,9 @@ type Plasma struct {
 	// netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and operbase)
+
+	// chain
+	rootchain *core.RootChain
 }
 
 func (s *Plasma) AddLesServer(ls LesServer) {
@@ -139,7 +138,7 @@ func New(config *Config) (*Plasma, error) {
 	log.Debug("try to init tx pool")
 	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(pls.chainConfig.ChainID), us)
 	pls.txPool = core.NewTxPool(config.TxPool, pls.chainConfig, pls.blockchain, txValidator)
-	pls.operator = core.NewOperator(pls, nil)
+	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), config.Operbase)
 	pls.operator.Start()
 
 	// if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
@@ -156,16 +155,10 @@ func New(config *Config) (*Plasma, error) {
 	// eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	// initChain
 	//dial eth chain
-	url := config.ChainUrl
-	client, err := ethclient.Dial(url)
+	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect eth rpc endpoint {%v}, err is:%v", url, err)
+		return nil, err
 	}
-	blc := eth.NewChainEthereum(client)
-	// set contract addr
-	eth.RootChainAddr = config.CxAddr
-	chain.Set(chain.Eth, blc)
-
 	return pls, nil
 }
 
