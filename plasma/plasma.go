@@ -9,11 +9,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/icstglobal/plasma/consensus"
 	"github.com/icstglobal/plasma/core"
 	"github.com/icstglobal/plasma/core/types"
+	"github.com/icstglobal/plasma/store"
 
 	log "github.com/sirupsen/logrus"
 
@@ -48,7 +48,7 @@ type Plasma struct {
 	lesServer LesServer
 
 	// DB interfaces
-	chainDb ethdb.Database // Block chain database
+	chainDb store.Database // Block chain database
 
 	eventMux *event.TypeMux
 	engine   consensus.Engine
@@ -173,7 +173,7 @@ func makeExtraData(extra []byte) []byte {
 }
 
 // CreateDB creates the chain database.
-func CreateDB(config *Config, name string) (ethdb.Database, error) {
+func CreateDB(config *Config, name string) (store.Database, error) {
 	path := ""
 	if filepath.IsAbs(name) {
 		path = name
@@ -181,11 +181,11 @@ func CreateDB(config *Config, name string) (ethdb.Database, error) {
 	path = filepath.Join(config.DataDir, name)
 	log.Debugf("path, config.DataDir: %v %v\n", path, config.DataDir)
 
-	db, err := ethdb.NewLDBDatabase(path, config.DatabaseCache, config.DatabaseHandles)
+	db, err := store.NewLDBDatabase(path, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err
 	}
-	// if db, ok := db.(*ethdb.LDBDatabase); ok {
+	// if db, ok := db.(*store.LDBDatabase); ok {
 	// db.Meter("eth/db/chaindata/")
 	// }
 	return db, nil
@@ -245,7 +245,7 @@ func (s *Plasma) BlockChain() *core.BlockChain { return s.blockchain }
 func (s *Plasma) TxPool() *core.TxPool         { return s.txPool }
 func (s *Plasma) EventMux() *event.TypeMux     { return s.eventMux }
 func (s *Plasma) Engine() consensus.Engine     { return s.engine }
-func (s *Plasma) ChainDb() ethdb.Database      { return s.chainDb }
+func (s *Plasma) ChainDb() store.Database      { return s.chainDb }
 func (s *Plasma) IsListening() bool            { return true } // Always listening
 // func (s *Plasma) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Plasma) NetVersion() uint64 { return s.networkID }

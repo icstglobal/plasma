@@ -29,7 +29,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,6 +37,7 @@ import (
 	"github.com/icstglobal/plasma/consensus"
 	"github.com/icstglobal/plasma/core/rawdb"
 	"github.com/icstglobal/plasma/core/types"
+	"github.com/icstglobal/plasma/store"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
@@ -87,7 +87,7 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db     ethdb.Database // Low level persistent database to store final content in
+	db     store.Database // Low level persistent database to store final content in
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
@@ -126,7 +126,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine) (*BlockChain, error) {
+func NewBlockChain(db store.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieNodeLimit: 256 * 1024 * 1024,
@@ -163,6 +163,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		return nil, ErrNoGenesis
 	}
 	if err := bc.loadLastState(); err != nil {
+		log.WithError(err).Error("failed to load last state while init block chain")
 		return nil, err
 	}
 	// Take ownership of this particular state
@@ -180,16 +181,18 @@ func (bc *BlockChain) loadLastState() error {
 	// Restore the last known head block
 	head := rawdb.ReadHeadBlockHash(bc.db)
 	if head == (common.Hash{}) {
-		// Corrupt or empty database, init from scratch
-		log.Warn("Empty database, resetting chain")
-		return bc.Reset()
+		// Corrupt or empty database
+		err := errors.New("last known head block not found, might be corrupt or empty database")
+		log.WithError(err).Error("head block not found in db")
+		return err
 	}
 	// Make sure the entire head block is available
 	currentBlock := bc.GetBlockByHash(head)
 	if currentBlock == nil {
-		// Corrupt or empty database, init from scratch
-		log.Warn("Head block missing, resetting chain", "hash", head)
-		return bc.Reset()
+		// Corrupt database
+		err := errors.New("can not found head block by hash, database maybe corrupt")
+		log.WithError(err).WithField("block.hash", head.String()).Error("block not found by hash")
+		return err
 	}
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(currentBlock)
@@ -212,53 +215,6 @@ func (bc *BlockChain) loadLastState() error {
 	}
 
 	return nil
-}
-
-// SetHead rewinds the local chain to a new head. In the case of headers, everything
-// above the new head will be deleted and the new one set. In the case of blocks
-// though, the head may be further rewound if block bodies are missing (non-archive
-// nodes after a fast sync).
-func (bc *BlockChain) SetHead(head uint64) error {
-	log.Warn("Rewinding blockchain", "target", head)
-
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	// Rewind the header chain, deleting all block bodies until then
-	delFn := func(db rawdb.DatabaseDeleter, hash common.Hash, num uint64) {
-		rawdb.DeleteBody(db, hash, num)
-	}
-	bc.hc.SetHead(head, delFn)
-	currentHeader := bc.hc.CurrentHeader()
-
-	// Clear out any stale content from the caches
-	bc.bodyCache.Purge()
-	bc.bodyRLPCache.Purge()
-	bc.blockCache.Purge()
-	bc.futureBlocks.Purge()
-
-	// Rewind the block chain, ensuring we don't end up with a stateless head block
-	if currentBlock := bc.CurrentBlock(); currentBlock != nil && currentHeader.Number.Uint64() < currentBlock.NumberU64() {
-		bc.currentBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
-	}
-	// Rewind the fast block in a simpleton way to the target head
-	if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock != nil && currentHeader.Number.Uint64() < currentFastBlock.NumberU64() {
-		bc.currentFastBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
-	}
-	// If either blocks reached nil, reset to the genesis state
-	if currentBlock := bc.CurrentBlock(); currentBlock == nil {
-		bc.currentBlock.Store(bc.genesisBlock)
-	}
-	if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock == nil {
-		bc.currentFastBlock.Store(bc.genesisBlock)
-	}
-	currentBlock := bc.CurrentBlock()
-	currentFastBlock := bc.CurrentFastBlock()
-
-	rawdb.WriteHeadBlockHash(bc.db, currentBlock.Hash())
-	rawdb.WriteHeadFastBlockHash(bc.db, currentFastBlock.Hash())
-
-	return bc.loadLastState()
 }
 
 // FastSyncCommitHead sets the current head block to the one defined by the hash
@@ -309,33 +265,6 @@ func (bc *BlockChain) Processor() Processor {
 	bc.procmu.RLock()
 	defer bc.procmu.RUnlock()
 	return bc.processor
-}
-
-// Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *BlockChain) Reset() error {
-	return bc.ResetWithGenesisBlock(bc.genesisBlock)
-}
-
-// ResetWithGenesisBlock purges the entire blockchain, restoring it to the
-// specified genesis state.
-func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
-	// Dump the entire block chain and purge the caches
-	if err := bc.SetHead(0); err != nil {
-		return err
-	}
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	rawdb.WriteBlock(bc.db, genesis)
-
-	bc.genesisBlock = genesis
-	bc.insert(bc.genesisBlock)
-	bc.currentBlock.Store(bc.genesisBlock)
-	bc.hc.SetGenesis(bc.genesisBlock.Header())
-	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
-	bc.currentFastBlock.Store(bc.genesisBlock)
-
-	return nil
 }
 
 // repair tries to repair the current blockchain by rolling back the current block
@@ -850,58 +779,6 @@ Hash: 0x%x
 Error: %v
 ##############################
 `, bc.chainConfig, block.Number(), block.Hash(), err))
-}
-
-// InsertHeaderChain attempts to insert the given header chain in to the local
-// chain, possibly creating a reorg. If an error is returned, it will return the
-// index number of the failing header as well an error describing what went wrong.
-//
-// The verify parameter can be used to fine tune whether nonce verification
-// should be done or not. The reason behind the optional check is because some
-// of the header retrieval mechanisms already need to verify nonces, as well as
-// because nonces can be verified sparsely, not needing to check each.
-func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	start := time.Now()
-	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
-		return i, err
-	}
-
-	// Make sure only one thread manipulates the chain at once
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
-
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
-	whFunc := func(header *types.Header) error {
-		bc.mu.Lock()
-		defer bc.mu.Unlock()
-
-		err := bc.hc.WriteHeader(header)
-		return err
-	}
-
-	return bc.hc.InsertHeaderChain(chain, whFunc, start)
-}
-
-// writeHeader writes a header into the local chain, given that its parent is
-// already known. If the total difficulty of the newly inserted header becomes
-// greater than the current known TD, the canonical chain is re-routed.
-//
-// Note: This method is not concurrent-safe with inserting blocks simultaneously
-// into the chain, as side effects caused by reorganisations cannot be emulated
-// without the real blocks. Hence, writing headers directly should only be done
-// in two scenarios: pure-header mode of operation (light clients), or properly
-// separated header/block phases (non-archive clients).
-func (bc *BlockChain) writeHeader(header *types.Header) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	err := bc.hc.WriteHeader(header)
-	return err
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

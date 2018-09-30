@@ -328,7 +328,11 @@ func ReadUTXO(db DatabaseReader, blockNum uint64, txIdx uint32, outIdx byte) *ty
 		return nil
 	}
 	v := new(types.UTXO)
-	rlp.DecodeBytes(data, v)
+	v.BlockNum = blockNum
+	v.TxIndex = txIdx
+	v.OutIndex = outIdx
+	v.Owner = common.BytesToAddress(data[:common.AddressLength])
+	v.Amount = new(big.Int).SetBytes(data[common.AddressLength:])
 	return v
 }
 
@@ -337,10 +341,10 @@ func DeleteUTXO(db DatabaseDeleter, blockNum uint64, txIdx uint32, outIdx byte) 
 	return db.Delete(utxoKey(blockNum, txIdx, outIdx))
 }
 
+// WriteUTXO persist a utxo into db
 func WriteUTXO(db DatabaseWriter, v *types.UTXO) error {
-	buf, err := rlp.EncodeToBytes(v)
-	if err != nil {
-		return err
-	}
+	var buf []byte
+	buf = append(buf, v.Owner.Bytes()...) // common.AddressLengh
+	buf = append(buf, v.Amount.Bytes()...)
 	return db.Put(utxoKey(v.BlockNum, v.TxIndex, v.OutIndex), buf)
 }

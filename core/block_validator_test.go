@@ -17,8 +17,14 @@ func TestValidateBlockTxs(t *testing.T) {
 	receiverKey, _ := crypto.GenerateKey()
 	receiver := crypto.PubkeyToAddress(receiverKey.PublicKey)
 
-	in1 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in2 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
+	in1 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in2 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
 
 	var br BlockReader // keep nil, not used this time
 	var ur UtxoReader = &DummyUtxoReader{
@@ -50,9 +56,18 @@ func TestValidateBlockDuplicatSpent(t *testing.T) {
 	receiverKey, _ := crypto.GenerateKey()
 	receiver := crypto.PubkeyToAddress(receiverKey.PublicKey)
 
-	in1 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in2 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in3 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 2, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
+	in1 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in2 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in3 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 2, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
 
 	var br BlockReader // keep nil, not used this time
 	var ur UtxoReader = &DummyUtxoReader{

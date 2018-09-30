@@ -26,7 +26,6 @@ func TestBlockEncoding(t *testing.T) {
 	}
 	// check("Difficulty", block.Difficulty(), big.NewInt(131072))
 	// check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
-	// check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	// check("Hash", block.Hash(), common.HexToHash("0a5843ac1cb04865017cb35a57b50b07084e5fcee39b5acadade33149f4fff9e"))
 	// check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
 	// check("Time", block.Time(), big.NewInt(1426516743))
@@ -54,8 +53,7 @@ func TestBlockEncoding(t *testing.T) {
 	block.header.Coinbase = common.HexToAddress("B5fc7BDF42D5f2a1CA0B1cbedA1080903BCCaE74")
 	block.header.Number = big.NewInt(1)
 	block.header.Time = big.NewInt(0)
-	block.header.TxHash = common.HexToHash("66cafc574e1f51ba9dc0568fc617a08ea2429fb384059c972f13b19fa1c8dd57")    //TODO: fake, should gen from transactions Merkle tree
-	block.header.MixDigest = common.HexToHash("83cafc574e1f51ba9dc0568fc617a08ea2429fb384059c972f13b19fa1c8dd55") // fake
+	block.header.TxHash = common.HexToHash("66cafc574e1f51ba9dc0568fc617a08ea2429fb384059c972f13b19fa1c8dd57") //TODO: fake, should gen from transactions Merkle tree
 
 	// fmt.Println(block.Transactions()[0].Hash().Hex())
 	// fmt.Println(tx1.data)

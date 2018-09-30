@@ -12,3 +12,4 @@ import:
 - package: github.com/jinzhu/copier
 - package: github.com/ethereum/go-ethereum
   version: ^1.8.3
+- package: github.com/icstglobal/go-icst

@@ -1,18 +1,18 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/icstglobal/plasma/core/rawdb"
 	"github.com/icstglobal/plasma/core/types"
+	"github.com/icstglobal/plasma/store"
 )
 
 // UTXOSet is a utxo manager, which implements interface UtxoReaderWriter
 type UTXOSet struct {
-	db ethdb.Database
+	db store.Database
 }
 
 //NewUTXOSet  connects utxoset to db
-func NewUTXOSet(db ethdb.Database) *UTXOSet {
+func NewUTXOSet(db store.Database) *UTXOSet {
 	return &UTXOSet{db: db}
 }
 
