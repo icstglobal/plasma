@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/icstglobal/plasma/consensus"
 	"github.com/icstglobal/plasma/core/rawdb"
 	"github.com/icstglobal/plasma/core/types"
+	"github.com/icstglobal/plasma/store"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -49,7 +49,7 @@ const (
 type HeaderChain struct {
 	config *params.ChainConfig
 
-	chainDb       ethdb.Database
+	chainDb       store.Database
 	genesisHeader *types.Header
 
 	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
@@ -68,7 +68,7 @@ type HeaderChain struct {
 //  getValidator should return the parent's validator
 //  procInterrupt points to the parent's interrupt semaphore
 //  wg points to the parent's shutdown wait group
-func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
+func NewHeaderChain(chainDb store.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
@@ -136,15 +136,6 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (err error) {
 	rawdb.WriteHeader(hc.chainDb, header)
 
 	// Delete any canonical number assignments above the new head
-	batch := hc.chainDb.NewBatch()
-	for i := number + 1; ; i++ {
-		hash := rawdb.ReadCanonicalHash(hc.chainDb, i)
-		if hash == (common.Hash{}) {
-			break
-		}
-		rawdb.DeleteCanonicalHash(batch, i)
-	}
-	batch.Write()
 
 	// Overwrite any stale canonical number assignments
 	var (
@@ -380,44 +371,6 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 // DeleteCallback is a callback function that is called by SetHead before
 // each header is deleted.
 type DeleteCallback func(rawdb.DatabaseDeleter, common.Hash, uint64)
-
-// SetHead rewinds the local chain to a new head. Everything above the new head
-// will be deleted and the new one set.
-func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
-	height := uint64(0)
-
-	if hdr := hc.CurrentHeader(); hdr != nil {
-		height = hdr.Number.Uint64()
-	}
-	batch := hc.chainDb.NewBatch()
-	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
-		hash := hdr.Hash()
-		num := hdr.Number.Uint64()
-		if delFn != nil {
-			delFn(batch, hash, num)
-		}
-		rawdb.DeleteHeader(batch, hash, num)
-		rawdb.DeleteTd(batch, hash, num)
-
-		hc.currentHeader.Store(hc.GetHeader(hdr.ParentHash, hdr.Number.Uint64()-1))
-	}
-	// Roll back the canonical chain numbering
-	for i := height; i > head; i-- {
-		rawdb.DeleteCanonicalHash(batch, i)
-	}
-	batch.Write()
-
-	// Clear out any stale content from the caches
-	hc.headerCache.Purge()
-	hc.numberCache.Purge()
-
-	if hc.CurrentHeader() == nil {
-		hc.currentHeader.Store(hc.genesisHeader)
-	}
-	hc.currentHeaderHash = hc.CurrentHeader().Hash()
-
-	rawdb.WriteHeadHeaderHash(hc.chainDb, hc.currentHeaderHash)
-}
 
 // SetGenesis sets a new genesis block header for the chain
 func (hc *HeaderChain) SetGenesis(head *types.Header) {

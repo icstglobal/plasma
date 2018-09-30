@@ -56,7 +56,6 @@ type Header struct {
 	Number     *big.Int       `json:"number"           gencodec:"required"`
 	Time       *big.Int       `json:"timestamp"        gencodec:"required"`
 	Extra      []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest  common.Hash    `json:"mixHash"          gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -217,7 +216,6 @@ func (b *Block) Number() *big.Int { return new(big.Int).Set(b.header.Number) }
 func (b *Block) Time() *big.Int   { return new(big.Int).Set(b.header.Time) }
 
 func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
 func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
 func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
 func (b *Block) TxHash() common.Hash      { return b.header.TxHash }

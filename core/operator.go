@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -93,16 +94,20 @@ func (o *Operator) Stop() {
 // Seal get txs from txpool and construct block, then seal the block
 func (o *Operator) Seal() error {
 	block := o.constructBlock()
+	newDbTx := o.chain.db.BeginTx()
+	if !newDbTx {
+		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
+	}
+	// append block to chain and update chain head
 	if err := o.chain.WriteBlock(block); err != nil {
 		return err
 	}
 	o.chain.ReplaceHead(block)
+	// remove used utxo
 	for txIdx, tx := range block.Transactions() {
 		for _, in := range tx.GetInsCopy() {
 			if err := o.utxoRD.Del(in.ID()); err != nil {
-				// TODO:need recover her:e
-				// log error and stop processing
-				log.WithField("utxo", *in).Fatal("failed to delete utxo")
+				log.WithError(err).WithField("utxo", *in).Error("failed to delete utxo")
 			}
 		}
 		for outIdx, out := range tx.GetOutsCopy() {
@@ -114,11 +119,18 @@ func (o *Operator) Seal() error {
 				Owner:  out.Owner,
 			}
 			if err := o.utxoRD.Put(&utxo); err != nil {
-				//TODO: need recover here
-				// log err and stop processing
-				log.WithField("utxo", utxo).Fatal("failed to write utxo")
+				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
 			}
 		}
+
+	}
+	if err := o.chain.db.CommitTx(); err != nil {
+		log.WithError(err).Error("failed to commit db tx")
+		//TODO: need recover here
+		return err
+	}
+
+	for _, tx := range block.Transactions() {
 		hash := tx.Hash()
 		o.txPool.removeTx(hash, true)
 	}
@@ -128,26 +140,13 @@ func (o *Operator) Seal() error {
 
 func (o *Operator) constructBlock() *types.Block {
 	// header
-	tstart := time.Now()
 	parent := o.chain.CurrentBlock()
-
-	tstamp := tstart.Unix()
-	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
-		tstamp = parent.Time().Int64() + 1
-	}
-	// this will ensure we're not going off too far in the future
-	if now := time.Now().Unix(); tstamp > now+1 {
-		wait := time.Duration(tstamp-now) * time.Second
-		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
-		time.Sleep(wait)
-	}
-
 	num := parent.Number()
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   o.Addr,
 		Number:     num.Add(num, common.Big1),
-		Time:       big.NewInt(tstamp),
+		Time:       big.NewInt(time.Now().Unix()),
 	}
 	// txs
 	txs := o.txPool.Content()
