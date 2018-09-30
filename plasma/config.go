@@ -2,7 +2,6 @@ package plasma
 
 import (
 	// "encoding/hex"
-	"math/big"
 	"os"
 	"os/user"
 	"time"
@@ -10,8 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/icstglobal/plasma/core"
 )
 
@@ -23,13 +20,8 @@ var DefaultConfig = Config{
 	DatabaseCache: 768,
 	TrieCache:     256,
 	TrieTimeout:   60 * time.Minute,
-	GasPrice:      big.NewInt(18 * params.Shannon),
 
-	TxPool: core.DefaultTxPoolConfig,
-	GPO: gasprice.Config{
-		Blocks:     20,
-		Percentile: 60,
-	},
+	TxPool:    core.DefaultTxPoolConfig,
 	DataDir:   "",
 	ChainType: 0,
 	ChainUrl:  "",
@@ -70,16 +62,11 @@ type Config struct {
 	TrieTimeout        time.Duration
 
 	// Mining-related options
-	Operbase     common.Address `toml:",omitempty"`
-	MinerThreads int            `toml:",omitempty"`
-	ExtraData    []byte         `toml:",omitempty"`
-	GasPrice     *big.Int
+	Operbase  common.Address `toml:",omitempty"`
+	ExtraData []byte         `toml:",omitempty"`
 
 	// Transaction pool options
 	TxPool core.TxPoolConfig
-
-	// Gas Price Oracle options
-	GPO gasprice.Config
 
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
