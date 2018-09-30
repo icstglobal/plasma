@@ -115,8 +115,10 @@ func (o *Operator) Seal() error {
 				UTXOID: types.UTXOID{
 					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
 				},
-				Amount: out.Amount,
-				Owner:  out.Owner,
+				TxOut: types.TxOut{
+					Amount: out.Amount,
+					Owner:  out.Owner,
+				},
 			}
 			if err := o.utxoRD.Put(&utxo); err != nil {
 				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")

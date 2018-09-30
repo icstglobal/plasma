@@ -17,9 +17,18 @@ func TestTxValidatorDuplicatSpent(t *testing.T) {
 	receiverKey, _ := crypto.GenerateKey()
 	receiver := crypto.PubkeyToAddress(receiverKey.PublicKey)
 
-	in1 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in2 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in3 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 2, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
+	in1 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in2 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in3 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 2, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
 
 	var ur UtxoReader = &DummyUtxoReader{
 		utxoset: map[types.UTXOID]*types.UTXO{in1.ID(): in1, in2.ID(): in2, in3.ID(): in3},
@@ -49,9 +58,18 @@ func TestTxValidatorInvalidOutputAmount(t *testing.T) {
 	receiverKey, _ := crypto.GenerateKey()
 	receiver := crypto.PubkeyToAddress(receiverKey.PublicKey)
 
-	in1 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in2 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in3 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 2, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
+	in1 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in2 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
+	in3 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 2, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
+	}
 
 	var ur UtxoReader = &DummyUtxoReader{
 		utxoset: map[types.UTXOID]*types.UTXO{in1.ID(): in1, in2.ID(): in2, in3.ID(): in3},
