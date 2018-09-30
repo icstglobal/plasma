@@ -2,13 +2,11 @@ package plasma
 
 import (
 	"fmt"
-	"math/big"
 	"runtime"
 	"sync"
 
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -52,9 +50,8 @@ type Plasma struct {
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
-	eventMux       *event.TypeMux
-	engine         consensus.Engine
-	accountManager *accounts.Manager
+	eventMux *event.TypeMux
+	engine   consensus.Engine
 
 	// bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	// bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -63,7 +60,6 @@ type Plasma struct {
 
 	// miner     *miner.Miner
 	operator *core.Operator
-	gasPrice *big.Int
 	operbase common.Address
 
 	networkID uint64
@@ -102,11 +98,9 @@ func New(config *Config) (*Plasma, error) {
 		chainDb:     chainDb,
 		chainConfig: chainConfig,
 		// eventMux:       ctx.EventMux,
-		// accountManager: ctx.AccountManager,
 		// engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
 		shutdownChan: make(chan bool),
 		networkID:    config.NetworkId,
-		gasPrice:     config.GasPrice,
 		operbase:     config.Operbase,
 		// bloomRequests:  make(chan chan *bloombits.Retrieval),
 		// bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
@@ -139,7 +133,7 @@ func New(config *Config) (*Plasma, error) {
 	log.Debug("try to init tx pool")
 	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(pls.chainConfig.ChainID), us)
 	pls.txPool = core.NewTxPool(config.TxPool, pls.chainConfig, pls.blockchain, txValidator)
-	pls.operator = core.NewOperator(eth.BlockChain(), eth.TxPool(), config.Operbase)
+	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), config.Operbase)
 	pls.operator.Start()
 
 	// if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
@@ -148,12 +142,6 @@ func New(config *Config) (*Plasma, error) {
 	// eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	// eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
-	// eth.APIBackend = &EthAPIBackend{eth, nil}
-	// gpoParams := config.GPO
-	// if gpoParams.Default == nil {
-	// gpoParams.Default = config.GasPrice
-	// }
-	// eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	// initChain
 	//dial eth chain
 	url := config.ChainUrl
@@ -162,8 +150,6 @@ func New(config *Config) (*Plasma, error) {
 		return nil, fmt.Errorf("failed to connect eth rpc endpoint {%v}, err is:%v", url, err)
 	}
 	blc := eth.NewChainEthereum(client)
-	// set contract addr
-	eth.RootChainAddr = config.CxAddr
 	chain.Set(chain.Eth, blc)
 
 	return pls, nil
@@ -255,13 +241,12 @@ func (s *Plasma) StartMining(local bool) error {
 
 // func (s *Plasma) Miner() *miner.Miner { return s.miner }
 
-func (s *Plasma) AccountManager() *accounts.Manager { return s.accountManager }
-func (s *Plasma) BlockChain() *core.BlockChain      { return s.blockchain }
-func (s *Plasma) TxPool() *core.TxPool              { return s.txPool }
-func (s *Plasma) EventMux() *event.TypeMux          { return s.eventMux }
-func (s *Plasma) Engine() consensus.Engine          { return s.engine }
-func (s *Plasma) ChainDb() ethdb.Database           { return s.chainDb }
-func (s *Plasma) IsListening() bool                 { return true } // Always listening
+func (s *Plasma) BlockChain() *core.BlockChain { return s.blockchain }
+func (s *Plasma) TxPool() *core.TxPool         { return s.txPool }
+func (s *Plasma) EventMux() *event.TypeMux     { return s.eventMux }
+func (s *Plasma) Engine() consensus.Engine     { return s.engine }
+func (s *Plasma) ChainDb() ethdb.Database      { return s.chainDb }
+func (s *Plasma) IsListening() bool            { return true } // Always listening
 // func (s *Plasma) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Plasma) NetVersion() uint64 { return s.networkID }
 func (s *Plasma) Config() *Config    { return s.config }
