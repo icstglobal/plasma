@@ -56,6 +56,9 @@ func (v *UtxoBlockValidator) validateTx(trans types.Transactions) error {
 		}
 		ins := tx.GetInsCopy()
 		for _, in := range ins {
+			if in == nil {
+				continue
+			}
 			if _, exist := spent[in.ID()]; exist {
 				return ErrDuplicateSpent
 			}

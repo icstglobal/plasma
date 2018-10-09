@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	// log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -127,6 +128,9 @@ var big8 = big.NewInt(8)
 func (s EIP155Signer) Sender(tx *Transaction) (senders [2]common.Address, err error) {
 	txHash := s.Hash(tx)
 	for i, sig := range tx.data.Sigs {
+		if sig.V == nil {
+			return senders, nil
+		}
 		chainId := deriveChainId(sig.V)
 		if chainId.Cmp(s.chainId) != 0 {
 			return senders, ErrInvalidChainId

@@ -44,7 +44,8 @@ type Operator struct {
 	txPool *TxPool
 	utxoRD UtxoReaderWriter
 
-	quit chan struct{} // quit channel
+	txsCh chan types.Transactions
+	quit  chan struct{} // quit channel
 }
 
 // NewOperator creates a new operator
@@ -54,6 +55,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address) *Operat
 		// PrivateKey: privateKey,
 		chain:  chain,
 		txPool: pool,
+		txsCh:  make(chan types.Transactions, 10),
 		quit:   make(chan struct{}),
 	}
 	return oper
@@ -67,6 +69,17 @@ func (o *Operator) SetOperbase(operbase common.Address) {
 // Start the operator to do mining
 func (o *Operator) Start() {
 	go o.start()
+	go o.processTxs()
+}
+
+func (o *Operator) processTxs() {
+	i := 0
+	for txs := range o.txsCh {
+		log.Debug("i:", i)
+		o.Seal(txs)
+		i += 1
+	}
+
 }
 
 func (o *Operator) start() {
@@ -77,13 +90,22 @@ func (o *Operator) start() {
 		case <-o.quit:
 			return
 		case <-ticker.C:
+
 			if txs := o.txPool.Content(); len(txs) == 0 {
 				continue
+			} else {
+				fmt.Printf("%v\n", "operator txs..")
+				o.txsCh <- txs
 			}
-			fmt.Printf("%v\n", "operator txs..")
-			o.Seal()
 		}
 	}
+}
+
+func (o *Operator) AddTxs(txs types.Transactions) {
+	if len(txs) == 0 {
+		return
+	}
+	o.txsCh <- txs
 }
 
 // Stop sends a sigal to stop the operator
@@ -92,8 +114,8 @@ func (o *Operator) Stop() {
 }
 
 // Seal get txs from txpool and construct block, then seal the block
-func (o *Operator) Seal() error {
-	block := o.constructBlock()
+func (o *Operator) Seal(txs types.Transactions) error {
+	block := o.constructBlock(txs)
 	newDbTx := o.chain.db.BeginTx()
 	if !newDbTx {
 		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
@@ -106,11 +128,17 @@ func (o *Operator) Seal() error {
 	// remove used utxo
 	for txIdx, tx := range block.Transactions() {
 		for _, in := range tx.GetInsCopy() {
+			if in == nil {
+				continue
+			}
 			if err := o.utxoRD.Del(in.ID()); err != nil {
 				log.WithError(err).WithField("utxo", *in).Error("failed to delete utxo")
 			}
 		}
 		for outIdx, out := range tx.GetOutsCopy() {
+			if out == nil {
+				continue
+			}
 			utxo := types.UTXO{
 				UTXOID: types.UTXOID{
 					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
@@ -119,6 +147,9 @@ func (o *Operator) Seal() error {
 					Amount: out.Amount,
 					Owner:  out.Owner,
 				},
+			}
+			if o.utxoRD == nil {
+				continue
 			}
 			if err := o.utxoRD.Put(&utxo); err != nil {
 				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
@@ -140,18 +171,17 @@ func (o *Operator) Seal() error {
 	return nil
 }
 
-func (o *Operator) constructBlock() *types.Block {
+func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
 	// header
 	parent := o.chain.CurrentBlock()
 	num := parent.Number()
+	log.Debug("parent.Number:", num)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   o.Addr,
 		Number:     num.Add(num, common.Big1),
 		Time:       big.NewInt(time.Now().Unix()),
 	}
-	// txs
-	txs := o.txPool.Content()
 
 	return types.NewBlock(header, txs)
 }

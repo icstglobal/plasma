@@ -10,10 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/icstglobal/go-icst/chain"
 	"github.com/icstglobal/go-icst/chain/eth"
+	"github.com/icstglobal/plasma/core/types"
 
 	"strings"
 	"time"
@@ -25,9 +26,10 @@ const (
 )
 
 type RootChain struct {
-	chain chain.Chain
-	sub   map[string]func(eventName string, log types.Log) // map topic0 to name
-	cxAbi abi.ABI
+	chain    chain.Chain
+	sub      map[string]func(eventName string, log ethtypes.Log) // map topic0 to name
+	cxAbi    abi.ABI
+	operator *Operator
 }
 
 type DepositEvent struct {
@@ -35,11 +37,11 @@ type DepositEvent struct {
 	DepositBlock *big.Int
 	Token        common.Address
 	Amount       *big.Int
-	Raw          types.Log // Blockchain specific contextual infos
+	Raw          ethtypes.Log // Blockchain specific contextual infos
 }
 
 // chain
-func NewRootChain(url string, abiStr string) (*RootChain, error) {
+func NewRootChain(url string, abiStr string, operator *Operator) (*RootChain, error) {
 
 	client, err := ethclient.Dial(url)
 	if err != nil {
@@ -53,9 +55,10 @@ func NewRootChain(url string, abiStr string) (*RootChain, error) {
 		return nil, err
 	}
 	rc := &RootChain{
-		chain: blc,
-		sub:   make(map[string]func(eventName string, log types.Log)),
-		cxAbi: abiParsed,
+		chain:    blc,
+		sub:      make(map[string]func(eventName string, log ethtypes.Log)),
+		cxAbi:    abiParsed,
+		operator: operator,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
@@ -90,7 +93,7 @@ func (rc *RootChain) loopEvent(eventName string) {
 	}
 }
 
-func (rc *RootChain) dealWithDepositEvent(eventName string, _log types.Log) {
+func (rc *RootChain) dealWithDepositEvent(eventName string, _log ethtypes.Log) {
 	// unpack log
 	out := new(DepositEvent)
 	err := rc.chain.UnpackLog(rc.cxAbi, out, eventName, _log)
@@ -98,10 +101,19 @@ func (rc *RootChain) dealWithDepositEvent(eventName string, _log types.Log) {
 		log.Errorf("UnpackLog Error: %v", err)
 		return
 	}
-	// output block
+	// construct tx
+	txOut := &types.TxOut{Owner: out.Depositor, Amount: out.Amount}
+	// txIn := &types.UTXO{TxOut = txOut}
+
+	fee := big.NewInt(1) // todo:fee
+	tx := types.NewTransaction(nil, nil, txOut, nil, fee)
+
+	txs := make(types.Transactions, 0)
+	txs = append(txs, tx)
+	rc.operator.AddTxs(txs)
 
 	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), _log.BlockNumber)
 }
 
-func (rc *RootChain) dealWithExitStartedEvent(eventName string, _log types.Log) {
+func (rc *RootChain) dealWithExitStartedEvent(eventName string, _log ethtypes.Log) {
 }
