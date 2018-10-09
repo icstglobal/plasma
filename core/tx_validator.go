@@ -38,10 +38,6 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 	}
 
 	ins := tx.GetInsCopy()
-	log.Debug("Validate ins:", ins)
-	if ins[0] == nil {
-		return nil
-	}
 	// check duplicate utxo inputs in the same tx
 	if ins[0].Equals(*ins[1]) {
 		return ErrDuplicateSpent

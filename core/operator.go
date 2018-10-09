@@ -188,29 +188,41 @@ func (o *Operator) SealDeposit(txs types.Transactions) error {
 	}
 	// append block to chain and update chain head
 	if err := o.chain.WriteDepositBlock(block); err != nil {
-		err := o.chain.db.RollbackTx()
-		if err != nil {
-			return err
+		_err := o.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
 		}
 
 		return err
 	}
 	o.chain.ReplaceHead(block)
+	// add deposit utxo to set
+	for txIdx, tx := range block.Transactions() {
+		for outIdx, out := range tx.GetOutsCopy() {
+			utxo := types.UTXO{
+				UTXOID: types.UTXOID{
+					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
+				},
+				TxOut: types.TxOut{
+					Amount: out.Amount,
+					Owner:  out.Owner,
+				},
+			}
+			if err := o.utxoRD.Put(&utxo); err != nil {
+				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
+			}
+		}
+
+	}
 	if err := o.chain.db.CommitTx(); err != nil {
 		log.WithError(err).Error("failed to commit db tx")
 		//TODO: need recover here
-		err := o.chain.db.RollbackTx()
-		if err != nil {
-			return err
+		_err := o.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
 		}
 		return err
 	}
-
-	for _, tx := range block.Transactions() {
-		hash := tx.Hash()
-		o.txPool.removeTx(hash, true)
-	}
-
 	return nil
 }
 

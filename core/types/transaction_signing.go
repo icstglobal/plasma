@@ -128,9 +128,6 @@ var big8 = big.NewInt(8)
 func (s EIP155Signer) Sender(tx *Transaction) (senders [2]common.Address, err error) {
 	txHash := s.Hash(tx)
 	for i, sig := range tx.data.Sigs {
-		if sig.V == nil {
-			return senders, nil
-		}
 		chainId := deriveChainId(sig.V)
 		if chainId.Cmp(s.chainId) != 0 {
 			return senders, ErrInvalidChainId

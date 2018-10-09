@@ -29,6 +29,7 @@ type RootChain struct {
 	chain    chain.Chain
 	sub      map[string]func(eventName string, log ethtypes.Log) // map topic0 to name
 	cxAbi    abi.ABI
+	abiStr   string
 	operator *Operator
 }
 
@@ -58,6 +59,7 @@ func NewRootChain(url string, abiStr string, operator *Operator) (*RootChain, er
 		chain:    blc,
 		sub:      make(map[string]func(eventName string, log ethtypes.Log)),
 		cxAbi:    abiParsed,
+		abiStr:   abiStr,
 		operator: operator,
 	}
 	// register dealing func
@@ -96,7 +98,7 @@ func (rc *RootChain) loopEvent(eventName string) {
 func (rc *RootChain) dealWithDepositEvent(eventName string, _log ethtypes.Log) {
 	// unpack log
 	out := new(DepositEvent)
-	err := rc.chain.UnpackLog(rc.cxAbi, out, eventName, _log)
+	err := rc.chain.UnpackLog(rc.abiStr, out, eventName, _log)
 	if err != nil {
 		log.Errorf("UnpackLog Error: %v", err)
 		return
