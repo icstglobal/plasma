@@ -102,11 +102,19 @@ func (rc *RootChain) dealWithDepositEvent(eventName string, _log ethtypes.Log) {
 		return
 	}
 	// construct tx
-	txOut := &types.TxOut{Owner: out.Depositor, Amount: out.Amount}
-	// txIn := &types.UTXO{TxOut = txOut}
+	txOut1 := &types.TxOut{Owner: out.Depositor, Amount: out.Amount}
+	txOut2 := &types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)}
+	txIn1 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 0, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)},
+	}
+	txIn2 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 0, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)},
+	}
 
 	fee := big.NewInt(1) // todo:fee
-	tx := types.NewTransaction(nil, nil, txOut, nil, fee)
+	tx := types.NewTransaction(txIn1, txIn2, txOut1, txOut2, fee)
 
 	txs := make(types.Transactions, 0)
 	txs = append(txs, tx)

@@ -49,7 +49,7 @@ type Operator struct {
 }
 
 // NewOperator creates a new operator
-func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address) *Operator {
+func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address, utxoRD UtxoReaderWriter) *Operator {
 	oper := &Operator{
 		Addr: opAddr,
 		// PrivateKey: privateKey,
@@ -57,6 +57,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address) *Operat
 		txPool: pool,
 		txsCh:  make(chan types.Transactions, 10),
 		quit:   make(chan struct{}),
+		utxoRD: utxoRD,
 	}
 	return oper
 }
@@ -73,11 +74,18 @@ func (o *Operator) Start() {
 }
 
 func (o *Operator) processTxs() {
-	i := 0
 	for txs := range o.txsCh {
-		log.Debug("i:", i)
-		o.Seal(txs)
-		i += 1
+		if txs[0].IsDepositTx() {
+			err := o.SealDeposit(txs)
+			if err != nil {
+				log.Error("operator seal deposit block error:", err.Error())
+			}
+		} else {
+			err := o.Seal(txs)
+			if err != nil {
+				log.Error("operator seal block error:", err.Error())
+			}
+		}
 	}
 
 }
@@ -122,23 +130,22 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	}
 	// append block to chain and update chain head
 	if err := o.chain.WriteBlock(block); err != nil {
+		err := o.chain.db.RollbackTx()
+		if err != nil {
+			return err
+		}
+
 		return err
 	}
 	o.chain.ReplaceHead(block)
 	// remove used utxo
 	for txIdx, tx := range block.Transactions() {
 		for _, in := range tx.GetInsCopy() {
-			if in == nil {
-				continue
-			}
 			if err := o.utxoRD.Del(in.ID()); err != nil {
 				log.WithError(err).WithField("utxo", *in).Error("failed to delete utxo")
 			}
 		}
 		for outIdx, out := range tx.GetOutsCopy() {
-			if out == nil {
-				continue
-			}
 			utxo := types.UTXO{
 				UTXOID: types.UTXOID{
 					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
@@ -147,9 +154,6 @@ func (o *Operator) Seal(txs types.Transactions) error {
 					Amount: out.Amount,
 					Owner:  out.Owner,
 				},
-			}
-			if o.utxoRD == nil {
-				continue
 			}
 			if err := o.utxoRD.Put(&utxo); err != nil {
 				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
@@ -160,6 +164,45 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	if err := o.chain.db.CommitTx(); err != nil {
 		log.WithError(err).Error("failed to commit db tx")
 		//TODO: need recover here
+		err := o.chain.db.RollbackTx()
+		if err != nil {
+			return err
+		}
+		return err
+	}
+
+	for _, tx := range block.Transactions() {
+		hash := tx.Hash()
+		o.txPool.removeTx(hash, true)
+	}
+
+	return nil
+}
+
+// SealDeposit get txs from txpool and construct block, then seal the block
+func (o *Operator) SealDeposit(txs types.Transactions) error {
+	block := o.constructBlock(txs)
+	newDbTx := o.chain.db.BeginTx()
+	if !newDbTx {
+		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
+	}
+	// append block to chain and update chain head
+	if err := o.chain.WriteDepositBlock(block); err != nil {
+		err := o.chain.db.RollbackTx()
+		if err != nil {
+			return err
+		}
+
+		return err
+	}
+	o.chain.ReplaceHead(block)
+	if err := o.chain.db.CommitTx(); err != nil {
+		log.WithError(err).Error("failed to commit db tx")
+		//TODO: need recover here
+		err := o.chain.db.RollbackTx()
+		if err != nil {
+			return err
+		}
 		return err
 	}
 

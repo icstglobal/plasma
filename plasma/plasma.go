@@ -132,7 +132,7 @@ func New(config *Config) (*Plasma, error) {
 	log.Debug("try to init tx pool")
 	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(pls.chainConfig.ChainID), us)
 	pls.txPool = core.NewTxPool(config.TxPool, pls.chainConfig, pls.blockchain, txValidator)
-	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), config.Operbase)
+	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), config.Operbase, us)
 	pls.operator.Start()
 
 	// if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {

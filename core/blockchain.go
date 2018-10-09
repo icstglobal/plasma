@@ -532,6 +532,22 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (err error) {
 	return nil
 }
 
+// WriteDepositBlock writes only the block and its metadata to the database,
+// The block body will be validated first.
+func (bc *BlockChain) WriteDepositBlock(block *types.Block) (err error) {
+	log.WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash().Hex()}).
+		Debug("BlockChain.WriteDepositBlock: validate block before actual write")
+
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	//TODO: db should returns error or not to incidate db operation status
+	//so that we know if inputs used can be remove from UTXO set
+	rawdb.WriteBlock(bc.db, block)
+
+	return nil
+}
+
 // ReplaceHead replace currentBlock
 func (bc *BlockChain) ReplaceHead(block *types.Block) (err error) {
 	bc.insert(block)

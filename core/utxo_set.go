@@ -28,6 +28,6 @@ func (us *UTXOSet) Del(id types.UTXOID) error {
 }
 
 //Write saves a utxo into db
-func (us *UTXOSet) Write(v *types.UTXO) error {
+func (us *UTXOSet) Put(v *types.UTXO) error {
 	return rawdb.WriteUTXO(us.db, v)
 }
