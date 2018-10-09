@@ -138,20 +138,34 @@ func (db *LDBDatabase) BeginTx() bool {
 
 }
 
+//CommitTx commits all the changes in the db transaction.
+//Caller should rollback the transactio nmanually by calling`RollbackTx`, if any error retuns
 func (db *LDBDatabase) CommitTx() error {
 	if db.batch == nil {
 		return errors.New("there is no open db tx")
 	}
-	return db.db.Write(db.batch, nil)
+	err := db.db.Write(db.batch, nil)
+	if err != nil {
+		return err
+	}
+
+	db.resetTx()
+
+	return nil
 }
 
+// RollbackTx abandon all the changes made in the transaction
 func (db *LDBDatabase) RollbackTx() error {
 	if db.batch == nil {
 		return errors.New("there is no open db tx")
 	}
 
-	db.batch.Reset()
-	db.batch = nil
+	db.resetTx()
 
 	return nil
+}
+
+func (db *LDBDatabase) resetTx() {
+	db.batch.Reset()
+	db.batch = nil
 }
