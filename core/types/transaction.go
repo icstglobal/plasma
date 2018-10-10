@@ -62,6 +62,14 @@ func NewTransaction(in1, in2 *UTXO, out1, out2 *TxOut, fee *big.Int) *Transactio
 	return &tx
 }
 
+func (tx *Transaction) IsDepositTx() bool {
+	log.WithFields(log.Fields{"in1": tx.data.Ins[0], "in2": tx.data.Ins[1]}).Debug("Transaction.GetInsCopy")
+	if tx.data.Ins[0].ID().BlockNum == 0 && tx.data.Ins[1].ID().BlockNum == 0 {
+		return true
+	}
+	return false
+}
+
 //GetInsCopy returns a copy of the tx ins
 func (tx *Transaction) GetInsCopy() []*UTXO {
 	log.WithFields(log.Fields{"in1": tx.data.Ins[0], "in2": tx.data.Ins[1]}).Debug("Transaction.GetInsCopy")

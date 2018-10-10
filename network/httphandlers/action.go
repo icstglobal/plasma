@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	ContractType      = "Plasma"
 	DepositMethodName = "deposit"
 )
 
@@ -64,6 +63,7 @@ func (action ActionHandler) Deposit(plasma *plasma.Plasma) http.HandlerFunc {
 		var blc chain.Chain
 		blc, err = chain.Get(chain.Eth)
 		if err != nil {
+			log.Error(err)
 			msg := "can not find eth chain!"
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
@@ -71,7 +71,7 @@ func (action ActionHandler) Deposit(plasma *plasma.Plasma) http.HandlerFunc {
 
 		callData := map[string]interface{}{}
 		// call rootchain contract deposit
-		tx, err := blc.CallWithAbi(context.Background(), from, ContractType, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(depositReq.Amount)), callData, plasma.Config().CxAbi)
+		tx, err := blc.CallWithAbi(context.Background(), from, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(depositReq.Amount)), callData, plasma.Config().CxAbi)
 		if err != nil {
 			msg := "blc.Deposit Error!"
 			log.Error(err)
@@ -132,7 +132,7 @@ func (action ActionHandler) AfterSign(plasma *plasma.Plasma) http.HandlerFunc {
 		}
 		callData := map[string]interface{}{}
 		// call rootchain contract deposit
-		tx, err := blc.CallWithAbi(context.Background(), from, ContractType, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(_req.Amount)), callData, plasma.Config().CxAbi)
+		tx, err := blc.CallWithAbi(context.Background(), from, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(_req.Amount)), callData, plasma.Config().CxAbi)
 		if err != nil {
 			msg := "blc.Deposit Error!"
 			http.Error(w, msg, http.StatusInternalServerError)

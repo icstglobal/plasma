@@ -322,6 +322,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 func (bc *BlockChain) insert(block *types.Block) {
 	// If the block is on a side chain or an unknown one, force other heads onto it too
 	updateHeads := rawdb.ReadCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
+	log.Debug("updateHeads:", updateHeads)
 
 	// Add the block to the canonical chain number scheme and mark as the head
 	rawdb.WriteCanonicalHash(bc.db, block.Hash(), block.NumberU64())
@@ -389,7 +390,8 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	// Check first that the block itself is known
 	block := bc.GetBlock(hash, number)
-	return block == nil
+	log.Debugf("HasBlock:%v %v %v", hash.Hex(), number, block)
+	return block != nil
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -510,12 +512,12 @@ var lastWrite uint64
 // WriteBlock writes only the block and its metadata to the database,
 // The block body will be validated first.
 func (bc *BlockChain) WriteBlock(block *types.Block) (err error) {
-	log.WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash()}).
+	log.WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash().Hex()}).
 		Debug("BlockChain.WriteBlock: validate block before actual write")
 
 	if err := bc.blockValidator.ValidateBody(block); err != nil {
 		log.WithError(err).
-			WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash()}).
+			WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash().Hex()}).
 			Warn("BlockChain.WriteBlock: invalid block body")
 		return err
 	}
@@ -525,6 +527,18 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (err error) {
 
 	//TODO: db should returns error or not to incidate db operation status
 	//so that we know if inputs used can be remove from UTXO set
+	rawdb.WriteBlock(bc.db, block)
+
+	return nil
+}
+
+// WriteDepositBlock writes only the block and its metadata to the database,
+func (bc *BlockChain) WriteDepositBlock(block *types.Block) (err error) {
+	log.WithFields(log.Fields{"block.num": block.Header().Number, "block.hash": block.Hash().Hex()}).
+		Debug("BlockChain.WriteDepositBlock: validate block before actual write")
+
+	bc.wg.Add(1)
+	defer bc.wg.Done()
 	rawdb.WriteBlock(bc.db, block)
 
 	return nil

@@ -27,7 +27,7 @@ func (us *UTXOSet) Del(id types.UTXOID) error {
 	return rawdb.DeleteUTXO(us.db, id.BlockNum, id.TxIndex, id.OutIndex)
 }
 
-//Write saves a utxo into db
-func (us *UTXOSet) Write(v *types.UTXO) error {
+//Put saves a utxo into db
+func (us *UTXOSet) Put(v *types.UTXO) error {
 	return rawdb.WriteUTXO(us.db, v)
 }
