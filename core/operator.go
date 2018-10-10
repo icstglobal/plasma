@@ -18,7 +18,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -102,7 +101,7 @@ func (o *Operator) start() {
 			if txs := o.txPool.Content(); len(txs) == 0 {
 				continue
 			} else {
-				fmt.Printf("%v\n", "operator txs..")
+				log.Debugf("%v\n", "operator txs..")
 				o.txsCh <- txs
 			}
 		}
@@ -130,9 +129,9 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	}
 	// append block to chain and update chain head
 	if err := o.chain.WriteBlock(block); err != nil {
-		err := o.chain.db.RollbackTx()
-		if err != nil {
-			return err
+		_err := o.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
 		}
 
 		return err
@@ -157,6 +156,11 @@ func (o *Operator) Seal(txs types.Transactions) error {
 			}
 			if err := o.utxoRD.Put(&utxo); err != nil {
 				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
+				_err := o.chain.db.RollbackTx()
+				if _err != nil {
+					log.Error("db.RollbackTx Error:", _err.Error())
+				}
+				return err
 			}
 		}
 
@@ -164,9 +168,9 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	if err := o.chain.db.CommitTx(); err != nil {
 		log.WithError(err).Error("failed to commit db tx")
 		//TODO: need recover here
-		err := o.chain.db.RollbackTx()
-		if err != nil {
-			return err
+		_err := o.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
 		}
 		return err
 	}
@@ -210,13 +214,17 @@ func (o *Operator) SealDeposit(txs types.Transactions) error {
 			}
 			if err := o.utxoRD.Put(&utxo); err != nil {
 				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
+				_err := o.chain.db.RollbackTx()
+				if _err != nil {
+					log.Error("db.RollbackTx Error:", _err.Error())
+				}
+				return err
 			}
 		}
 
 	}
 	if err := o.chain.db.CommitTx(); err != nil {
 		log.WithError(err).Error("failed to commit db tx")
-		//TODO: need recover here
 		_err := o.chain.db.RollbackTx()
 		if _err != nil {
 			log.Error("db.RollbackTx Error:", _err.Error())

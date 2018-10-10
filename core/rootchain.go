@@ -8,7 +8,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -18,7 +17,6 @@ import (
 	"github.com/icstglobal/plasma/core/types"
 
 	"reflect"
-	"strings"
 	"time"
 )
 
@@ -30,7 +28,6 @@ const (
 type RootChain struct {
 	chain    chain.Chain
 	sub      map[string]func(event *chain.ContractEvent) // map topic0 to name
-	cxAbi    abi.ABI
 	abiStr   string
 	cxAddr   string
 	operator *Operator
@@ -53,15 +50,9 @@ func NewRootChain(url string, abiStr string, cxAddr string, operator *Operator) 
 	}
 	blc := eth.NewChainEthereum(client)
 	chain.Set(chain.Eth, blc)
-	// parse abi
-	abiParsed, err := abi.JSON(strings.NewReader(abiStr))
-	if err != nil {
-		return nil, err
-	}
 	rc := &RootChain{
 		chain:    blc,
 		sub:      make(map[string]func(event *chain.ContractEvent)),
-		cxAbi:    abiParsed,
 		abiStr:   abiStr,
 		cxAddr:   cxAddr,
 		operator: operator,
