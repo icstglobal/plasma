@@ -142,7 +142,7 @@ func New(config *Config) (*Plasma, error) {
 	// eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	//dial eth chain
-	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, pls.operator)
+	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr, pls.operator)
 	if err != nil {
 		return nil, err
 	}

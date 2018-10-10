@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/icstglobal/go-icst/chain/eth"
 	"github.com/icstglobal/plasma/core/types"
 
+	"reflect"
 	"strings"
 	"time"
 )
@@ -27,9 +29,10 @@ const (
 
 type RootChain struct {
 	chain    chain.Chain
-	sub      map[string]func(eventName string, log ethtypes.Log) // map topic0 to name
+	sub      map[string]func(event *chain.ContractEvent) // map topic0 to name
 	cxAbi    abi.ABI
 	abiStr   string
+	cxAddr   string
 	operator *Operator
 }
 
@@ -42,7 +45,7 @@ type DepositEvent struct {
 }
 
 // chain
-func NewRootChain(url string, abiStr string, operator *Operator) (*RootChain, error) {
+func NewRootChain(url string, abiStr string, cxAddr string, operator *Operator) (*RootChain, error) {
 
 	client, err := ethclient.Dial(url)
 	if err != nil {
@@ -57,52 +60,53 @@ func NewRootChain(url string, abiStr string, operator *Operator) (*RootChain, er
 	}
 	rc := &RootChain{
 		chain:    blc,
-		sub:      make(map[string]func(eventName string, log ethtypes.Log)),
+		sub:      make(map[string]func(event *chain.ContractEvent)),
 		cxAbi:    abiParsed,
 		abiStr:   abiStr,
+		cxAddr:   cxAddr,
 		operator: operator,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
 	rc.sub[ExitedStartEventName] = rc.dealWithExitStartedEvent
 
+	var depositEvent DepositEvent
 	// start loop to sync root chain event
-	go rc.loopEvent(DepositEventName)
-	go rc.loopEvent(ExitedStartEventName)
+	go rc.loopEvent(DepositEventName, depositEvent)
+	// go rc.loopEvent(ExitedStartEventName)
 
 	return rc, nil
 }
 
-func (rc *RootChain) loopEvent(eventName string) {
+func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 	fromBlock := big.NewInt(100)
-	topic := rc.cxAbi.Events[eventName].Id()
-	topics := make([][]common.Hash, 1)
-	topics[0] = append(topics[0], topic)
+
+	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
+	if err != nil {
+		log.Error("Decode cxAddr Error:", err)
+		return
+	}
+
 	for {
-		logs, err := rc.chain.GetEvents(context.Background(), topics, fromBlock)
+		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventName, reflect.TypeOf(event))
 		if err != nil {
 			log.Errorf("chain.GetEvents: %v", err)
 			return
 		}
 
-		for _, log := range logs {
-			rc.sub[eventName](eventName, log)
+		for _, event := range events {
+			rc.sub[eventName](event)
 		}
 		time.Sleep(time.Second * 2)
-		if len(logs) > 0 {
-			fromBlock = big.NewInt(int64(logs[len(logs)-1].BlockNumber) + 1)
+		if len(events) > 0 {
+			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
 		}
 	}
 }
 
-func (rc *RootChain) dealWithDepositEvent(eventName string, _log ethtypes.Log) {
-	// unpack log
-	out := new(DepositEvent)
-	err := rc.chain.UnpackLog(rc.abiStr, out, eventName, _log)
-	if err != nil {
-		log.Errorf("UnpackLog Error: %v", err)
-		return
-	}
+func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) {
+	out := event.V.(*DepositEvent)
+
 	// construct tx
 	txOut1 := &types.TxOut{Owner: out.Depositor, Amount: out.Amount}
 	txOut2 := &types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)}
@@ -122,8 +126,8 @@ func (rc *RootChain) dealWithDepositEvent(eventName string, _log ethtypes.Log) {
 	txs = append(txs, tx)
 	rc.operator.AddTxs(txs)
 
-	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), _log.BlockNumber)
+	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), event.BlockNum)
 }
 
-func (rc *RootChain) dealWithExitStartedEvent(eventName string, _log ethtypes.Log) {
+func (rc *RootChain) dealWithExitStartedEvent(event *chain.ContractEvent) {
 }
