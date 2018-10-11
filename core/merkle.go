@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"log"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -51,19 +50,15 @@ func (mt MerkleTree) Proof(leafIdx int) [][]byte {
 	}
 
 	leaf := mt.leaves[leafIdx]
-	log.Println("leaf:", leaf.hash)
 	var proof [][]byte
 	for {
 		p := leaf.p
 		if p == nil {
-			log.Println("the end")
 			break
 		}
 		if leaf == p.l {
-			log.Println("it's left child, append right child:", p.r.hash)
 			proof = append(proof, p.r.hash)
 		} else {
-			log.Println("it's righ child, append left child:", p.l.hash)
 			proof = append(proof, p.l.hash)
 		}
 		leaf = p
