@@ -109,18 +109,18 @@ contract RootChain {
      * @dev Allows Plasma chain operator to submit block root.
      * @param _root The root of a child chain block.
      */
-    function submitBlock(bytes32 _root)
+    function submitBlock(bytes32 _root, uint256 blockNum)
         public
         onlyOperator
     {   
-        childChain[currentChildBlock] = ChildBlock({
+        childChain[blockNum] = ChildBlock({
             root: _root,
             timestamp: block.timestamp
         });
 
         // Update block numbers.
-        currentChildBlock = currentChildBlock.add(CHILD_BLOCK_INTERVAL);
-        currentDepositBlock = 1;
+        // currentChildBlock = currentChildBlock.add(CHILD_BLOCK_INTERVAL);
+        // currentDepositBlock = 1;
 
         emit BlockSubmitted(_root, block.timestamp);
     }
@@ -128,20 +128,20 @@ contract RootChain {
     /**
      * @dev Allows anyone to deposit funds into the Plasma chain.
      */
-    function deposit()
+    function deposit(uint256 blockNum)
         public
         payable
     {
         // Only allow up to CHILD_BLOCK_INTERVAL deposits per child block.
-        require(currentDepositBlock < CHILD_BLOCK_INTERVAL);
+        // require(currentDepositBlock < CHILD_BLOCK_INTERVAL);
 
         bytes32 root = keccak256(msg.sender, address(0), msg.value);
-        uint256 depositBlock = getDepositBlock();
-        childChain[depositBlock] = ChildBlock({
+        // uint256 depositBlock = getDepositBlock();
+        childChain[blockNum] = ChildBlock({
             root: root,
             timestamp: block.timestamp
         });
-        currentDepositBlock = currentDepositBlock.add(1);
+        // currentDepositBlock = currentDepositBlock.add(1);
 
         emit Deposit(msg.sender, depositBlock, address(0), msg.value);
     }

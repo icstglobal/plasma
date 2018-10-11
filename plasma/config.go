@@ -21,10 +21,11 @@ var DefaultConfig = Config{
 	TrieCache:     256,
 	TrieTimeout:   60 * time.Minute,
 
-	TxPool:   core.DefaultTxPoolConfig,
-	DataDir:  "",
-	ChainUrl: "",
-	CxAddr:   "",
+	TxPool:       core.DefaultTxPoolConfig,
+	DataDir:      "",
+	ChainUrl:     "",
+	CxAddr:       "",
+	KeystorePath: "",
 }
 
 func init() {
@@ -79,9 +80,11 @@ type Config struct {
 	// in memory.
 	DataDir string
 
-	ChainUrl string
-	CxAddr   string
-	CxAbi    string
+	ChainUrl     string
+	CxAddr       string
+	CxAbi        string
+	OperPwd      string
+	KeystorePath string
 }
 
 type configMarshaling struct {

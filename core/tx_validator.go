@@ -34,6 +34,7 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 	// Make sure the transaction is signed properly
 	senders, err := types.Sender(v.signer, tx)
 	if err != nil {
+		log.Error("types.Sender Error:", err)
 		return ErrInvalidSender
 	}
 

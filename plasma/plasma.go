@@ -2,6 +2,7 @@ package plasma
 
 import (
 	"fmt"
+	"io/ioutil"
 	"runtime"
 	"sync"
 
@@ -17,6 +18,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -132,20 +134,40 @@ func New(config *Config) (*Plasma, error) {
 	log.Debug("try to init tx pool")
 	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(pls.chainConfig.ChainID), us)
 	pls.txPool = core.NewTxPool(config.TxPool, pls.chainConfig, pls.blockchain, txValidator)
-	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), config.Operbase, us)
-	pls.operator.Start()
 
-	// if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
-	// return nil, err
-	// }
-	// eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
-	// eth.miner.SetExtra(makeExtraData(config.ExtraData))
+	// load from keystore
+	keystoreDir := "./keystore"
+	files, err := ioutil.ReadDir(keystoreDir)
+	if err != nil {
+		log.Error("keystore ioutil.ReadDir Error:", err)
+	}
+
+	var key *keystore.Key
+	for _, file := range files {
+		path := keystoreDir + "/" + file.Name()
+		log.Debug("key path:", path, config.OperPwd)
+		jsonStr, err := ioutil.ReadFile(path)
+		pwd := config.OperPwd
+		key, err = keystore.DecryptKey(jsonStr, pwd)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		break
+	}
+	if key == nil {
+		return nil, fmt.Errorf("can not find operator key!")
+	}
 
 	//dial eth chain
-	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr, pls.operator)
+	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr)
 	if err != nil {
 		return nil, err
 	}
+	// new operator
+	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), key.PrivateKey, us, pls.rootchain)
+	pls.operator.Start()
+	pls.rootchain.SetTxsCh(pls.operator.TxsCh)
 	return pls, nil
 }
 
