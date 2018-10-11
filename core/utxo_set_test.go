@@ -33,7 +33,7 @@ func TestReadWriteUtxo(t *testing.T) {
 		UTXOID: types.UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 1},
 		TxOut:  types.TxOut{Owner: sender, Amount: big.NewInt(50)},
 	}
-	if err := us.Write(u1); err != nil {
+	if err := us.Put(u1); err != nil {
 		t.Fatal(err, "can not save utxo")
 	}
 
