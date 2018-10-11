@@ -17,8 +17,8 @@ func TestEIP155Signing(t *testing.T) {
 	signer := NewEIP155Signer(big.NewInt(1))
 
 	tx1 := &Transaction{}
-	in1 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
-	in2 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, Owner: sender, Amount: big.NewInt(50)}
+	in1 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 0, OutIndex: 0}, TxOut: TxOut{Owner: sender, Amount: big.NewInt(50)}}
+	in2 := &UTXO{UTXOID: UTXOID{BlockNum: 1, TxIndex: 1, OutIndex: 0}, TxOut: TxOut{Owner: sender, Amount: big.NewInt(50)}}
 	tx1.data.Ins = [2]*UTXO{in1, in2}
 
 	out1 := &TxOut{Owner: receiver, Amount: big.NewInt(90)}
