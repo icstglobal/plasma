@@ -1,5 +1,5 @@
 hash: 12a9d13b71b9ec2a006cba252140916e8c2d88ede685d71d8354260b19656e3b
-updated: 2018-09-30T11:53:16.581834+08:00
+updated: 2018-10-10T19:14:31.291055+08:00
 imports:
 - name: github.com/aristanetworks/goarista
   version: ff33da284e760fcdb03c33d37a719e5ed30ba844
@@ -9,16 +9,12 @@ imports:
   version: cff30e1d23fc9e800b2b5b4b41ef1817dda07e9f
   subpackages:
   - btcec
-- name: github.com/davecgh/go-spew
-  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
-  subpackages:
-  - spew
 - name: github.com/deckarep/golang-set
   version: cbaa98ba5575e67703b32b4b19f73c91f3c4159e
 - name: github.com/edsrzf/mmap-go
   version: 0bce6a6887123b67a60366d2c9fe2dfb74289d2e
 - name: github.com/ethereum/go-ethereum
-  version: 477eb0933b9529f7deeccc233cc815fe34a8ea56
+  version: 8bbe72075e4e16442c4e28d999edee12e294329e
   subpackages:
   - accounts
   - accounts/abi
@@ -51,16 +47,16 @@ imports:
   - crypto/sha3
   - eth/downloader
   - eth/filters
-  - eth/gasprice
   - ethclient
   - ethdb
   - event
-  - internal/ethapi
   - log
   - metrics
   - p2p
   - p2p/discover
   - p2p/discv5
+  - p2p/enode
+  - p2p/enr
   - p2p/nat
   - p2p/netutil
   - params
@@ -72,7 +68,7 @@ imports:
 - name: github.com/go-stack/stack
   version: 2fee6af1a9795aafbe0253a0cfbdf668e1fb8a9a
 - name: github.com/golang/protobuf
-  version: 7011d38ac0d201eeddff4a4085a657c3da322d75
+  version: ddf22928ea3c56eb4292a0adbbf5001b1e8e7d0d
   subpackages:
   - proto
   - protoc-gen-go/descriptor
@@ -106,10 +102,11 @@ imports:
   - soap
   - ssdp
 - name: github.com/icstglobal/go-icst
-  version: 25b0b2441b321a925e249af9bb6949969339a10e
+  version: fc7b3b37e65158d430c2e85652bcdced569604c2
   subpackages:
   - chain
   - chain/eth
+  - common
   - transaction
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
@@ -207,12 +204,6 @@ imports:
   - runes
   - transform
   - unicode/norm
-- name: golang.org/x/tools
-  version: b3c0be4c978b9aca5acfec41ac043ed3914154a7
-  subpackages:
-  - go/ast/astutil
-  - imports
-  - internal/fastwalk
 - name: gopkg.in/karalabe/cookiejar.v2
   version: 8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57
   subpackages:
