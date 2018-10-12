@@ -1,5 +1,5 @@
-hash: 12a9d13b71b9ec2a006cba252140916e8c2d88ede685d71d8354260b19656e3b
-updated: 2018-10-10T19:14:31.291055+08:00
+hash: 3790ce9b19b6f553e94c1d711923fac1462512a5444532c12308ea4c7e268dcd
+updated: 2018-10-12T10:20:23.804427+08:00
 imports:
 - name: github.com/aristanetworks/goarista
   version: ff33da284e760fcdb03c33d37a719e5ed30ba844
@@ -14,7 +14,7 @@ imports:
 - name: github.com/edsrzf/mmap-go
   version: 0bce6a6887123b67a60366d2c9fe2dfb74289d2e
 - name: github.com/ethereum/go-ethereum
-  version: 8bbe72075e4e16442c4e28d999edee12e294329e
+  version: 225171a4bfcc16bd12a1906b1e0d43d0b18c353b
   subpackages:
   - accounts
   - accounts/abi
@@ -28,7 +28,6 @@ imports:
   - common/hexutil
   - common/math
   - common/mclock
-  - common/prque
   - consensus
   - consensus/ethash
   - consensus/misc
@@ -55,8 +54,6 @@ imports:
   - p2p
   - p2p/discover
   - p2p/discv5
-  - p2p/enode
-  - p2p/enr
   - p2p/nat
   - p2p/netutil
   - params
@@ -180,7 +177,6 @@ imports:
 - name: golang.org/x/sys
   version: d0be0721c37eeb5299f245a996a483160fc36940
   subpackages:
-  - cpu
   - unix
   - windows
 - name: golang.org/x/text
@@ -204,6 +200,12 @@ imports:
   - runes
   - transform
   - unicode/norm
+- name: golang.org/x/tools
+  version: d3c6139142f2181b42a21db02903fafea6215674
+  subpackages:
+  - go/ast/astutil
+  - imports
+  - internal/fastwalk
 - name: gopkg.in/karalabe/cookiejar.v2
   version: 8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57
   subpackages:
