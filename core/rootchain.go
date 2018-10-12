@@ -135,13 +135,16 @@ func (rc *RootChain) PubKeyToAddress(privateKey *ecdsa.PrivateKey) []byte {
 
 func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKey) error {
 	from := rc.PubKeyToAddress(privateKey)
+	var root [32]byte
+	copy(root[:], block.Header().TxHash.Bytes())
 	callData := map[string]interface{}{
-		"root":     "",
+		"_root":    root,
 		"blockNum": block.Number(),
 	}
 	// call rootchain contract deposit
 	tx, err := rc.chain.CallWithAbi(context.Background(), from, common.Hex2Bytes(rc.cxAddr), SubmitBlockMethodName, big.NewInt(0), callData, rc.abiStr)
 	if err != nil {
+		log.WithError(err).Error("submitblock callData", callData)
 		return err
 	}
 	// sig tx

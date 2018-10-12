@@ -15,6 +15,6 @@ plasma:
 
 rootchain:
     operPwd: wzp
-    url: http://localhost:8545
-    cxAddr: "248c20ffa55f91a8a6231e5484d7e2e9bcf47c8d" 
+    url: http://119.28.248.204:8546
+    cxAddr: "f9f927ec90320c257b0ba5a597c50c175a155c14" 
     cxFileName: "rootchain/deploy/contract_data/RootChain.json" 

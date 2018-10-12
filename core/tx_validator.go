@@ -52,6 +52,7 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 		if utxo == nil {
 			return ErrAlreadySpent
 		}
+		log.Debugf("utxo.Owner %v %v", utxo.Owner, senders[i].Hex())
 		// the signer should own the unspent tx out
 		if !reflect.DeepEqual(utxo.Owner, senders[i]) {
 			return ErrTxOutNotOwned

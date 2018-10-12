@@ -7,6 +7,12 @@ This is a deployment tool which deploy contract to ethereum root chain.
 
 ## Usage
 
+### install
+
+```shell
+npm install
+```
+
 ### compile
 ```shell
 npm run compile

@@ -30,7 +30,7 @@ import (
 
 const (
 	rate                = 2
-	submitBlockInterval = 10
+	submitBlockInterval = 3
 )
 
 // Operator a key element in plasma
@@ -84,6 +84,7 @@ func (o *Operator) processTxs() {
 				log.Error("operator seal deposit block error:", err.Error())
 			}
 		} else {
+			log.Debug("processTxs Seal", txs)
 			err := o.Seal(txs)
 			if err != nil {
 				log.Error("operator seal block error:", err.Error())
