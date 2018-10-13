@@ -133,7 +133,6 @@ func (s EIP155Signer) Sender(tx *Transaction) (senders [2]common.Address, err er
 		if chainId.Cmp(s.chainId) != 0 {
 			return senders, ErrInvalidChainId
 		}
-		// V := sig.V.Sub(sig.V, s.chainIdMul)
 		V := new(big.Int).Sub(sig.V, s.chainIdMul)
 		V.Sub(V, big8)
 		if senders[i], err = recoverPlain(txHash, sig.R, sig.S, V); err != nil {

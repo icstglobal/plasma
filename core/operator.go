@@ -189,6 +189,7 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	if block.NumberU64()%submitBlockInterval == 0 {
 		err := o.SubmitBlock(block)
 		if err != nil {
+			log.WithError(err).Error("operator.SubmitBlock Error.")
 			return err
 		}
 	}

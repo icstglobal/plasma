@@ -69,6 +69,7 @@ func (action ActionHandler) Deposit(plasma *plasma.Plasma) http.HandlerFunc {
 			return
 		}
 
+		// todo: deposit can't get blockNum, fix it later
 		callData := map[string]interface{}{
 			"blockNum": big.NewInt(1),
 		}
@@ -132,6 +133,7 @@ func (action ActionHandler) AfterSign(plasma *plasma.Plasma) http.HandlerFunc {
 			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
+		// todo: deposit can't get blockNum, fix it later
 		callData := map[string]interface{}{
 			"blockNum": big.NewInt(1),
 		}

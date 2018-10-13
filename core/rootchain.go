@@ -141,7 +141,6 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 		"_root":    root,
 		"blockNum": block.Number(),
 	}
-	// call rootchain contract deposit
 	tx, err := rc.chain.CallWithAbi(context.Background(), from, common.Hex2Bytes(rc.cxAddr), SubmitBlockMethodName, big.NewInt(0), callData, rc.abiStr)
 	if err != nil {
 		log.WithError(err).Error("submitblock callData", callData)
@@ -150,6 +149,7 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 	// sig tx
 	sigBytes, err := ethcrypto.Sign(tx.Hash(), privateKey)
 	if err != nil {
+		log.WithError(err).Error("sign tx")
 		return err
 	}
 	return rc.chain.ConfirmTrans(context.Background(), tx, sigBytes)
