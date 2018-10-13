@@ -67,12 +67,14 @@ func startHTTP() (*HTTPServer, error) {
 	chainUrl := viper.GetString("rootchain.url")
 	cxAddr := viper.GetString("rootchain.cxAddr")
 	cxFileName := viper.GetString("rootchain.cxFileName")
+	operPwd := viper.GetString("rootchain.operPwd")
 
 	cfg := &plasma.DefaultConfig
 	cfg.DataDir = datadir
 	cfg.NetworkId = uint64(networkId)
 	cfg.ChainUrl = chainUrl
 	cfg.CxAddr = cxAddr
+	cfg.OperPwd = operPwd
 	// read abi from json
 	cxData := new(CxData)
 	file, err := os.Open(cxFileName)

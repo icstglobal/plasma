@@ -17,6 +17,7 @@
 package core
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"math/big"
 	"time"
@@ -28,35 +29,38 @@ import (
 )
 
 const (
-	rate = 2
+	rate                = 2
+	submitBlockInterval = 3
 )
 
 // Operator a key element in plasma
 // 1. seal a block
 // 2. commit a block hash
-// 3.
 type Operator struct {
-	Addr common.Address
-	// PrivateKey *ecdsa.PrivateKey
+	Addr       common.Address
+	privateKey *ecdsa.PrivateKey
 
-	chain  *BlockChain
-	txPool *TxPool
-	utxoRD UtxoReaderWriter
+	chain     *BlockChain
+	txPool    *TxPool
+	rootchain *RootChain
+	utxoRD    UtxoReaderWriter
 
-	txsCh chan types.Transactions
+	TxsCh chan types.Transactions
 	quit  chan struct{} // quit channel
 }
 
 // NewOperator creates a new operator
-func NewOperator(chain *BlockChain, pool *TxPool, opAddr common.Address, utxoRD UtxoReaderWriter) *Operator {
+func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, utxoRD UtxoReaderWriter, rootchain *RootChain) *Operator {
+	from := rootchain.PubKeyToAddress(privateKey)
 	oper := &Operator{
-		Addr: opAddr,
-		// PrivateKey: privateKey,
-		chain:  chain,
-		txPool: pool,
-		txsCh:  make(chan types.Transactions, 10),
-		quit:   make(chan struct{}),
-		utxoRD: utxoRD,
+		Addr:       common.BytesToAddress(from),
+		privateKey: privateKey,
+		chain:      chain,
+		rootchain:  rootchain,
+		txPool:     pool,
+		TxsCh:      make(chan types.Transactions, 10),
+		quit:       make(chan struct{}),
+		utxoRD:     utxoRD,
 	}
 	return oper
 }
@@ -73,13 +77,14 @@ func (o *Operator) Start() {
 }
 
 func (o *Operator) processTxs() {
-	for txs := range o.txsCh {
+	for txs := range o.TxsCh {
 		if txs[0].IsDepositTx() {
 			err := o.SealDeposit(txs)
 			if err != nil {
 				log.Error("operator seal deposit block error:", err.Error())
 			}
 		} else {
+			log.Debug("processTxs Seal", txs)
 			err := o.Seal(txs)
 			if err != nil {
 				log.Error("operator seal block error:", err.Error())
@@ -102,7 +107,7 @@ func (o *Operator) start() {
 				continue
 			} else {
 				log.Debugf("%v\n", "operator txs..")
-				o.txsCh <- txs
+				o.TxsCh <- txs
 			}
 		}
 	}
@@ -112,7 +117,7 @@ func (o *Operator) AddTxs(txs types.Transactions) {
 	if len(txs) == 0 {
 		return
 	}
-	o.txsCh <- txs
+	o.TxsCh <- txs
 }
 
 // Stop sends a sigal to stop the operator
@@ -178,6 +183,15 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	for _, tx := range block.Transactions() {
 		hash := tx.Hash()
 		o.txPool.removeTx(hash, true)
+	}
+	// sumbit block every n blocks
+	log.Debug("block.NumberU64()%submitBlockInterval:", block.NumberU64()%submitBlockInterval)
+	if block.NumberU64()%submitBlockInterval == 0 {
+		err := o.SubmitBlock(block)
+		if err != nil {
+			log.WithError(err).Error("operator.SubmitBlock Error.")
+			return err
+		}
 	}
 
 	return nil
@@ -250,9 +264,9 @@ func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
 }
 
 // SubmitBlock write block hash to root chain
-func (o *Operator) SubmitBlock(b *types.Block) error {
-	// todo
-	return nil
+
+func (o *Operator) SubmitBlock(block *types.Block) error {
+	return o.rootchain.SubmitBlock(block, o.privateKey)
 }
 
 // generate merkle proof for a tx in a block

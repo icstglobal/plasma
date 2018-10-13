@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -11,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	// "github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/icstglobal/go-icst/chain"
 	"github.com/icstglobal/go-icst/chain/eth"
@@ -21,16 +23,17 @@ import (
 )
 
 const (
-	DepositEventName     = "Deposit"
-	ExitedStartEventName = "ExistedStart"
+	DepositEventName      = "Deposit"
+	ExitedStartEventName  = "ExistedStart"
+	SubmitBlockMethodName = "submitBlock"
 )
 
 type RootChain struct {
-	chain    chain.Chain
-	sub      map[string]func(event *chain.ContractEvent) // map topic0 to name
-	abiStr   string
-	cxAddr   string
-	operator *Operator
+	chain  chain.Chain
+	sub    map[string]func(event *chain.ContractEvent) // map topic0 to name
+	abiStr string
+	cxAddr string
+	txsCh  chan types.Transactions
 }
 
 type DepositEvent struct {
@@ -42,7 +45,7 @@ type DepositEvent struct {
 }
 
 // chain
-func NewRootChain(url string, abiStr string, cxAddr string, operator *Operator) (*RootChain, error) {
+func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) {
 
 	client, err := ethclient.Dial(url)
 	if err != nil {
@@ -51,11 +54,10 @@ func NewRootChain(url string, abiStr string, cxAddr string, operator *Operator) 
 	blc := eth.NewChainEthereum(client)
 	chain.Set(chain.Eth, blc)
 	rc := &RootChain{
-		chain:    blc,
-		sub:      make(map[string]func(event *chain.ContractEvent)),
-		abiStr:   abiStr,
-		cxAddr:   cxAddr,
-		operator: operator,
+		chain:  blc,
+		sub:    make(map[string]func(event *chain.ContractEvent)),
+		abiStr: abiStr,
+		cxAddr: cxAddr,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
@@ -67,6 +69,10 @@ func NewRootChain(url string, abiStr string, cxAddr string, operator *Operator) 
 	// go rc.loopEvent(ExitedStartEventName)
 
 	return rc, nil
+}
+
+func (rc *RootChain) SetTxsCh(txsCh chan types.Transactions) {
+	rc.txsCh = txsCh
 }
 
 func (rc *RootChain) loopEvent(eventName string, event interface{}) {
@@ -115,10 +121,36 @@ func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) {
 
 	txs := make(types.Transactions, 0)
 	txs = append(txs, tx)
-	rc.operator.AddTxs(txs)
+	rc.txsCh <- txs
 
 	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), event.BlockNum)
 }
 
 func (rc *RootChain) dealWithExitStartedEvent(event *chain.ContractEvent) {
+}
+
+func (rc *RootChain) PubKeyToAddress(privateKey *ecdsa.PrivateKey) []byte {
+	return rc.chain.PubKeyToAddress(privateKey.Public().(*ecdsa.PublicKey))
+}
+
+func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKey) error {
+	from := rc.PubKeyToAddress(privateKey)
+	var root [32]byte
+	copy(root[:], block.Header().TxHash.Bytes())
+	callData := map[string]interface{}{
+		"_root":    root,
+		"blockNum": block.Number(),
+	}
+	tx, err := rc.chain.CallWithAbi(context.Background(), from, common.Hex2Bytes(rc.cxAddr), SubmitBlockMethodName, big.NewInt(0), callData, rc.abiStr)
+	if err != nil {
+		log.WithError(err).Error("submitblock callData", callData)
+		return err
+	}
+	// sig tx
+	sigBytes, err := ethcrypto.Sign(tx.Hash(), privateKey)
+	if err != nil {
+		log.WithError(err).Error("sign tx")
+		return err
+	}
+	return rc.chain.ConfirmTrans(context.Background(), tx, sigBytes)
 }
