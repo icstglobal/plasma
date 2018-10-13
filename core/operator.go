@@ -264,6 +264,18 @@ func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
 }
 
 // SubmitBlock write block hash to root chain
+
 func (o *Operator) SubmitBlock(block *types.Block) error {
 	return o.rootchain.SubmitBlock(block, o.privateKey)
+}
+
+// generate merkle proof for a tx in a block
+func merkleProof(b *types.Block, txIdx uint32) [][]byte {
+	var hashs [][]byte
+	for _, tx := range b.Transactions() {
+		txHash := tx.Hash()
+		hashs = append(hashs, txHash[:])
+	}
+	mtree := NewMerkleTree(hashs)
+	return mtree.Proof(int(txIdx))
 }
