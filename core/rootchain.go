@@ -3,10 +3,13 @@ package core
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
+	"github.com/icstglobal/plasma/store"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,11 +32,12 @@ const (
 )
 
 type RootChain struct {
-	chain  chain.Chain
-	sub    map[string]func(event *chain.ContractEvent) // map topic0 to name
-	abiStr string
-	cxAddr string
-	txsCh  chan types.Transactions
+	chain   chain.Chain
+	sub     map[string]func(event *chain.ContractEvent) // map topic0 to name
+	abiStr  string
+	cxAddr  string
+	txsCh   chan types.Transactions
+	chainDb store.Database // Block chain database
 }
 
 type DepositEvent struct {
@@ -45,7 +49,7 @@ type DepositEvent struct {
 }
 
 // chain
-func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) {
+func NewRootChain(url string, abiStr string, cxAddr string, chainDb store.Database) (*RootChain, error) {
 
 	client, err := ethclient.Dial(url)
 	if err != nil {
@@ -54,10 +58,11 @@ func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) 
 	blc := eth.NewChainEthereum(client)
 	chain.Set(chain.Eth, blc)
 	rc := &RootChain{
-		chain:  blc,
-		sub:    make(map[string]func(event *chain.ContractEvent)),
-		abiStr: abiStr,
-		cxAddr: cxAddr,
+		chain:   blc,
+		sub:     make(map[string]func(event *chain.ContractEvent)),
+		abiStr:  abiStr,
+		cxAddr:  cxAddr,
+		chainDb: chainDb,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
@@ -92,7 +97,25 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 		}
 
 		for _, event := range events {
+			// filter repeat block
+			key, value := rc.hashEvent(event)
+			log.Debugf("event key hex: %v blockNumber:%v", hex.EncodeToString(key), event.BlockNum)
+			hasKey, err := rc.chainDb.Has(key)
+			if err != nil {
+				log.WithError(err).Error("chainDb Has key Error.")
+				return
+			}
+			if hasKey {
+				log.Warn("repeat event occured.")
+				continue
+			}
 			rc.sub[eventName](event)
+			// save event to db
+			err = rc.chainDb.Put(key, value)
+			if err != nil {
+				log.WithError(err).Error("chainDb Put Error.")
+				return
+			}
 		}
 		time.Sleep(time.Second * 2)
 		if len(events) > 0 {
@@ -102,6 +125,7 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 }
 
 func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) {
+
 	out := event.V.(*DepositEvent)
 
 	// construct tx
@@ -124,6 +148,18 @@ func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) {
 	rc.txsCh <- txs
 
 	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), event.BlockNum)
+}
+
+func (rc *RootChain) hashEvent(event *chain.ContractEvent) ([]byte, []byte) {
+	jsonBytes, err := json.Marshal(&event)
+	if err != nil {
+		log.WithError(err).Error("json.Marshal Error.")
+		return nil, nil
+	}
+
+	// log.Debugf("event: %#v\n, %#v", event, string(jsonBytes))
+	md5Bytes := md5.Sum(jsonBytes)
+	return md5Bytes[:], jsonBytes
 }
 
 func (rc *RootChain) dealWithExitStartedEvent(event *chain.ContractEvent) {
