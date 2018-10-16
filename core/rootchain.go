@@ -108,7 +108,6 @@ func (rc *RootChain) SetTxsCh(txsCh chan types.Transactions) {
 
 // GetFromBlock get fromBlock from db. if not exist, get it from config.
 func (rc *RootChain) GetFromBlock() (*big.Int, error) {
-	return big.NewInt(2000), nil
 	var fromBlock *big.Int
 	hasFromBlock, err := rc.chainDb.Has([]byte(FromBlockKey))
 	if err != nil {
