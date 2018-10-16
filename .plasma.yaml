@@ -18,3 +18,4 @@ rootchain:
     url: http://119.28.248.204:8546
     cxAddr: "f9f927ec90320c257b0ba5a597c50c175a155c14" 
     cxFileName: "rootchain/deploy/contract_data/RootChain.json" 
+    fromBlock: 2000

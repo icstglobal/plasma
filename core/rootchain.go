@@ -21,23 +21,47 @@ import (
 	"github.com/icstglobal/go-icst/chain/eth"
 	"github.com/icstglobal/plasma/core/types"
 
+	"github.com/spf13/viper"
 	"reflect"
 	"time"
 )
 
 const (
-	DepositEventName      = "Deposit"
-	ExitedStartEventName  = "ExistedStart"
-	SubmitBlockMethodName = "submitBlock"
+	DepositEventName         = "Deposit"
+	ExitedStartEventName     = "ExistedStart"
+	SubmitBlockMethodName    = "submitBlock"
+	FromBlockKey             = "RootChain.FromBlock"
+	CurrentBlockEventDataKey = "RootChain.CurrentBlockEventData"
 )
 
 type RootChain struct {
-	chain   chain.Chain
-	sub     map[string]func(event *chain.ContractEvent) // map topic0 to name
-	abiStr  string
-	cxAddr  string
-	txsCh   chan types.Transactions
-	chainDb store.Database // Block chain database
+	chain     chain.Chain
+	sub       map[string]func(event *chain.ContractEvent) // map topic0 to name
+	abiStr    string
+	cxAddr    string
+	txsCh     chan types.Transactions
+	chainDb   store.Database // Block chain database
+	fromBlock int64
+}
+
+type CurrentBlockEventData struct {
+	blockNum uint64
+	hashList [][]byte
+}
+
+func (self *CurrentBlockEventData) DelLastBlockEventHash(currentNum uint64, chainDb store.Database) {
+	if self.blockNum == currentNum {
+		return
+	}
+
+	for _, v := range self.hashList {
+		err := chainDb.Delete(v)
+		if err != nil {
+			log.WithError(err).Error("chainDb.Delete Error")
+			continue
+		}
+	}
+	self.hashList = [][]byte{}
 }
 
 type DepositEvent struct {
@@ -51,6 +75,7 @@ type DepositEvent struct {
 // chain
 func NewRootChain(url string, abiStr string, cxAddr string, chainDb store.Database) (*RootChain, error) {
 
+	fromBlock := viper.GetInt64("rootchain.fromBlock")
 	client, err := ethclient.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect eth rpc endpoint {%v}, err is:%v", url, err)
@@ -58,11 +83,12 @@ func NewRootChain(url string, abiStr string, cxAddr string, chainDb store.Databa
 	blc := eth.NewChainEthereum(client)
 	chain.Set(chain.Eth, blc)
 	rc := &RootChain{
-		chain:   blc,
-		sub:     make(map[string]func(event *chain.ContractEvent)),
-		abiStr:  abiStr,
-		cxAddr:  cxAddr,
-		chainDb: chainDb,
+		chain:     blc,
+		sub:       make(map[string]func(event *chain.ContractEvent)),
+		abiStr:    abiStr,
+		cxAddr:    cxAddr,
+		chainDb:   chainDb,
+		fromBlock: fromBlock,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
@@ -80,12 +106,82 @@ func (rc *RootChain) SetTxsCh(txsCh chan types.Transactions) {
 	rc.txsCh = txsCh
 }
 
+// GetFromBlock get fromBlock from db. if not exist, get it from config.
+func (rc *RootChain) GetFromBlock() (*big.Int, error) {
+	return big.NewInt(2000), nil
+	var fromBlock *big.Int
+	hasFromBlock, err := rc.chainDb.Has([]byte(FromBlockKey))
+	if err != nil {
+		log.WithError(err).Error("chainDb Has key Error.")
+		return nil, err
+	}
+	if hasFromBlock {
+		fromBlockBytes, err := rc.chainDb.Get([]byte(FromBlockKey))
+		if err != nil {
+			log.WithError(err).Error("chainDb Get FromBlock Error.")
+			return nil, err
+		}
+		fromBlock = new(big.Int).SetBytes(fromBlockBytes)
+
+	} else {
+		fromBlock = big.NewInt(rc.fromBlock)
+	}
+	return fromBlock, nil
+}
+
+// GetCurrentBlockEventData get currentBlockEventData from db.
+func (rc *RootChain) GetCurrentBlockEventData() (*CurrentBlockEventData, error) {
+	var currentBlockEventData *CurrentBlockEventData
+	hasData, err := rc.chainDb.Has([]byte(CurrentBlockEventDataKey))
+	if err != nil {
+		log.WithError(err).Error("chainDb Has key Error.")
+		return nil, err
+	}
+	if hasData {
+		bytes, err := rc.chainDb.Get([]byte(CurrentBlockEventDataKey))
+		if err != nil {
+			log.WithError(err).Error("chainDb Get FromBlock Error.")
+			return nil, err
+		}
+		err = json.Unmarshal(bytes, &currentBlockEventData)
+		if err != nil {
+			log.WithError(err).Error("json.Unmarshal currentBlockEventData Error.")
+			return nil, err
+		}
+		return currentBlockEventData, nil
+
+	}
+	return new(CurrentBlockEventData), nil
+}
+
+func (rc *RootChain) PutCurrentBlockEventData(eventData *CurrentBlockEventData) error {
+	jsonBytes, err := json.Marshal(eventData)
+	if err != nil {
+		log.WithError(err).Error("json.Marshal Error.")
+		return err
+	}
+
+	return rc.chainDb.Put([]byte(CurrentBlockEventDataKey), jsonBytes)
+}
+
 func (rc *RootChain) loopEvent(eventName string, event interface{}) {
-	fromBlock := big.NewInt(100)
+
+	fromBlock, err := rc.GetFromBlock()
+	if err != nil {
+		return
+	}
+
+	log.Debugf("fromBlock:%v", fromBlock)
 
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
 	if err != nil {
 		log.Error("Decode cxAddr Error:", err)
+		return
+	}
+	// get CurrentBlockEventData
+	currentBlockEventData, err := rc.GetCurrentBlockEventData()
+	if err != nil {
+		log.Errorf("chain.GetCurrentBlockEventData: %v", err)
 		return
 	}
 
@@ -98,6 +194,7 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 
 		for _, event := range events {
 			// filter repeat block
+			currentBlockEventData.DelLastBlockEventHash(event.BlockNum, rc.chainDb)
 			key, value := rc.hashEvent(event)
 			log.Debugf("event key hex: %v blockNumber:%v", hex.EncodeToString(key), event.BlockNum)
 			hasKey, err := rc.chainDb.Has(key)
@@ -113,13 +210,27 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 			// save event to db
 			err = rc.chainDb.Put(key, value)
 			if err != nil {
-				log.WithError(err).Error("chainDb Put Error.")
+				log.WithError(err).Error("chainDb Put eventKey Error.")
+				return
+			}
+			currentBlockEventData.blockNum = event.BlockNum
+			currentBlockEventData.hashList = append(currentBlockEventData.hashList, key)
+			err = rc.PutCurrentBlockEventData(currentBlockEventData)
+			if err != nil {
+				log.WithError(err).Error("chainDb PutCurrentBlockEventData Error.")
 				return
 			}
 		}
 		time.Sleep(time.Second * 2)
 		if len(events) > 0 {
 			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
+			//save fromBlock to db
+			err = rc.chainDb.Put([]byte(FromBlockKey), fromBlock.Bytes())
+			if err != nil {
+				log.WithError(err).Error("chainDb.Put FromBlock Error")
+				return
+			}
+
 		}
 	}
 }
