@@ -23,14 +23,15 @@ import (
 )
 
 const (
-	DepositEventName      = "Deposit"
-	ExitedStartEventName  = "ExistedStart"
-	SubmitBlockMethodName = "submitBlock"
+	DepositEventName        = "Deposit"
+	ExitedStartEventName    = "ExistedStart"
+	BlockSubmittedEventName = "BlockSubmitted"
+	SubmitBlockMethodName   = "submitBlock"
 )
 
 type RootChain struct {
 	chain  chain.Chain
-	sub    map[string]func(event *chain.ContractEvent) // map topic0 to name
+	sub    map[string]func(event *chain.ContractEvent) error // map topic0 to name
 	abiStr string
 	cxAddr string
 	txsCh  chan types.Transactions
@@ -44,6 +45,13 @@ type DepositEvent struct {
 	Raw          ethtypes.Log // Blockchain specific contextual infos
 }
 
+type BlockSubmittedEvent struct {
+	Root                []byte
+	LastDepositBlockNum *big.Int
+	SubmittedBlockNum   *big.Int
+	Time                *big.Int
+}
+
 // chain
 func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) {
 
@@ -55,17 +63,22 @@ func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) 
 	chain.Set(chain.Eth, blc)
 	rc := &RootChain{
 		chain:  blc,
-		sub:    make(map[string]func(event *chain.ContractEvent)),
+		sub:    make(map[string]func(event *chain.ContractEvent) error),
 		abiStr: abiStr,
 		cxAddr: cxAddr,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
+	rc.sub[BlockSubmittedEventName] = rc.dealWithBlockSubmittedEvent
 	rc.sub[ExitedStartEventName] = rc.dealWithExitStartedEvent
 
-	var depositEvent DepositEvent
 	// start loop to sync root chain event
-	go rc.loopEvent(DepositEventName, depositEvent)
+	eventTypes := map[string]reflect.Type{
+		DepositEventName:        reflect.TypeOf(DepositEvent{}),
+		BlockSubmittedEventName: reflect.TypeOf(BlockSubmittedEvent{}),
+	}
+	go rc.loopEvents(eventTypes)
+	// go rc.loopEvent(DepositEventName, depositEvent)
 	// go rc.loopEvent(ExitedStartEventName)
 
 	return rc, nil
@@ -75,7 +88,7 @@ func (rc *RootChain) SetTxsCh(txsCh chan types.Transactions) {
 	rc.txsCh = txsCh
 }
 
-func (rc *RootChain) loopEvent(eventName string, event interface{}) {
+func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
 	fromBlock := big.NewInt(100)
 
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
@@ -85,14 +98,14 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 	}
 
 	for {
-		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventName, reflect.TypeOf(event))
+		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventTypes)
 		if err != nil {
 			log.Errorf("chain.GetEvents: %v", err)
 			return
 		}
 
 		for _, event := range events {
-			rc.sub[eventName](event)
+			rc.sub[event.Name](event)
 		}
 		time.Sleep(time.Second * 2)
 		if len(events) > 0 {
@@ -101,7 +114,33 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 	}
 }
 
-func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) {
+// func (rc *RootChain) loopEvent(eventName string, event interface{}) {
+// 	fromBlock := big.NewInt(100)
+
+// 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
+// 	if err != nil {
+// 		log.Error("Decode cxAddr Error:", err)
+// 		return
+// 	}
+
+// 	for {
+// 		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventName, reflect.TypeOf(event))
+// 		if err != nil {
+// 			log.Errorf("chain.GetEvents: %v", err)
+// 			return
+// 		}
+
+// 		for _, event := range events {
+// 			rc.sub[eventName](event)
+// 		}
+// 		time.Sleep(time.Second * 2)
+// 		if len(events) > 0 {
+// 			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
+// 		}
+// 	}
+// }
+
+func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) error {
 	out := event.V.(*DepositEvent)
 
 	// construct tx
@@ -124,9 +163,32 @@ func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) {
 	rc.txsCh <- txs
 
 	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), event.BlockNum)
+
+	return nil
 }
 
-func (rc *RootChain) dealWithExitStartedEvent(event *chain.ContractEvent) {
+var blockSubmiittedEventHandler func(lastDepositBlockNum, currentBlockNum uint64) error
+
+func (rc *RootChain) RegisterBlockSubmittedEventHandler(handler func(lastDepositBlockNum, currentBlockNum uint64) error) {
+	blockSubmiittedEventHandler = handler
+}
+
+func (rc *RootChain) dealWithBlockSubmittedEvent(event *chain.ContractEvent) error {
+	if blockSubmiittedEventHandler == nil {
+		log.Warn("no BlockSubmiittedEvent Handler registered")
+		return nil
+	}
+
+	e := event.V.(*BlockSubmittedEvent)
+	lastDeposiBlockNum := e.LastDepositBlockNum.Uint64()
+	submittedBlockNum := e.SubmittedBlockNum.Uint64()
+	blockSubmiittedEventHandler(lastDeposiBlockNum, submittedBlockNum)
+
+	return nil
+}
+
+func (rc *RootChain) dealWithExitStartedEvent(event *chain.ContractEvent) error {
+	return nil
 }
 
 func (rc *RootChain) PubKeyToAddress(privateKey *ecdsa.PrivateKey) []byte {

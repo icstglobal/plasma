@@ -19,6 +19,7 @@ package core
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -31,6 +32,8 @@ import (
 const (
 	rate                = 2
 	submitBlockInterval = 3
+	// max deposits allowed between every two non-deposit plasma blocks; should be consistent with "root chain contract"
+	childBlockInterval = 1000
 )
 
 // Operator a key element in plasma
@@ -47,6 +50,8 @@ type Operator struct {
 
 	TxsCh chan types.Transactions
 	quit  chan struct{} // quit channel
+	// the block number of non-deposit block on plasma, increased by "childBlockInterval"
+	currentChildBlock uint64
 }
 
 // NewOperator creates a new operator
@@ -61,6 +66,16 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 		TxsCh:      make(chan types.Transactions, 10),
 		quit:       make(chan struct{}),
 		utxoRD:     utxoRD,
+	}
+	// complete block submit when we get the BlockSubmittedEvent from root chain
+	rootchain.RegisterBlockSubmittedEventHandler(oper.completeBlockSubmit)
+	currentBlockNum := chain.CurrentHeader().Number.Uint64()
+	// head bock is non-deposit block
+	if currentBlockNum%childBlockInterval == 0 {
+		oper.currentChildBlock = currentBlockNum
+	} else {
+		// head block is deposit block
+		oper.currentChildBlock = ((currentBlockNum / childBlockInterval) + 1) * childBlockInterval
 	}
 	return oper
 }
@@ -126,6 +141,7 @@ func (o *Operator) Stop() {
 }
 
 // Seal get txs from txpool and construct block, then seal the block
+// Non-Deposit block will not be broadcasted to p2p network immediately, instead we need to wait for `BlockSubmittedEvent` and `completeBlockSubmit`
 func (o *Operator) Seal(txs types.Transactions) error {
 	block := o.constructBlock(txs)
 	newDbTx := o.chain.db.BeginTx()
@@ -245,10 +261,13 @@ func (o *Operator) SealDeposit(txs types.Transactions) error {
 		}
 		return err
 	}
+
+	//TODO: broadcast deposit block to p2p network
+
 	return nil
 }
 
-func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
+func (o *Operator) constructDepositBlock(txs types.Transactions) *types.Block {
 	// header
 	parent := o.chain.CurrentBlock()
 	num := parent.Number()
@@ -263,10 +282,49 @@ func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
 	return types.NewBlock(header, txs)
 }
 
-// SubmitBlock write block hash to root chain
+// construct non-deposit block
+func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
+	// header
+	header := &types.Header{
+		Coinbase: o.Addr,
+		Number:   new(big.Int).SetUint64(o.currentChildBlock),
+		Time:     big.NewInt(time.Now().Unix()),
+	}
 
+	return types.NewBlock(header, txs)
+}
+
+// SubmitBlock write block hash to root chain
 func (o *Operator) SubmitBlock(block *types.Block) error {
+	//set next child block number
+	o.currentChildBlock += childBlockInterval
 	return o.rootchain.SubmitBlock(block, o.privateKey)
+}
+
+func (o *Operator) completeBlockSubmit(lastBlockNum, submittedBlockNum uint64) error {
+	//TODO: can we simply get block by num?
+	b := o.chain.CurrentBlock()
+	if b.NumberU64() != submittedBlockNum {
+		err := errors.New("can only complete the submit of current block. This could be caused by wrong order of 'BlockSubmittedEvent'")
+		log.WithError(err).Error("failed to complete block submit")
+		return err
+	}
+	/*
+	* get last block hash
+	* upadte parent hash of current block
+	* broadcast current block
+	 */
+	lastDepositBlock := o.chain.GetBlockByNumber(lastBlockNum)
+	if lastDepositBlock == nil {
+		err := fmt.Errorf("block not found by num:%v", lastBlockNum)
+		log.WithError(err).Error("can not found last deposit block")
+		return err
+	}
+	//build the link from current non-deposit block to the last deposit block before it
+	b.Header().ParentHash = lastDepositBlock.Hash()
+	o.chain.WriteBlock(b) //update the block data
+	//TODO: broadcast block
+	return nil
 }
 
 // generate merkle proof for a tx in a block
