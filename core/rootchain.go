@@ -129,31 +129,6 @@ func (rc *RootChain) PutFromBlock(fromBlock *big.Int) error {
 	return rc.chainDb.Put([]byte(FromBlockKey), fromBlock.Bytes())
 }
 
-// GetCurrentBlockEventData get currentBlockEventData from db.
-func (rc *RootChain) GetCurrentBlockEventData() (*CurrentBlockEventData, error) {
-	var currentBlockEventData *CurrentBlockEventData
-	hasData, err := rc.chainDb.Has([]byte(CurrentBlockEventDataKey))
-	if err != nil {
-		log.WithError(err).Error("chainDb Has key Error.")
-		return nil, err
-	}
-	if hasData {
-		bytes, err := rc.chainDb.Get([]byte(CurrentBlockEventDataKey))
-		if err != nil {
-			log.WithError(err).Error("chainDb Get FromBlock Error.")
-			return nil, err
-		}
-		err = json.Unmarshal(bytes, &currentBlockEventData)
-		if err != nil {
-			log.WithError(err).Error("json.Unmarshal currentBlockEventData Error.")
-			return nil, err
-		}
-		return currentBlockEventData, nil
-
-	}
-	return new(CurrentBlockEventData), nil
-}
-
 func (rc *RootChain) PutCurrentBlockEventData(eventData *CurrentBlockEventData) error {
 	jsonBytes, err := json.Marshal(eventData)
 	if err != nil {
@@ -178,8 +153,7 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 		log.Error("Decode cxAddr Error:", err)
 		return
 	}
-	// get CurrentBlockEventData
-	currentBlockEventData, err := rc.GetCurrentBlockEventData()
+	currentBlockEventData := new(CurrentBlockEventData)
 	if err != nil {
 		log.Errorf("chain.GetCurrentBlockEventData: %v", err)
 		return
