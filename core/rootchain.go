@@ -203,9 +203,9 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 				log.WithError(err).Error("chainDb Put eventKey Error.")
 				return
 			}
-			fromBlock = big.NewInt(int64(event.BlockNum + 1))
 			isLastEvent := (i+1 == len(events))
 			if isLastEvent || currentBlockEventData.blockNum != events[i+1].BlockNum {
+				fromBlock = big.NewInt(int64(event.BlockNum + 1))
 				// save fromblock after finish one Block
 				err = rc.PutFromBlock(fromBlock)
 				if err != nil {
