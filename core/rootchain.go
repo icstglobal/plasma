@@ -50,12 +50,25 @@ type CurrentBlockEventData struct {
 }
 
 func (self *CurrentBlockEventData) DelLastBlockEventHash(chainDb store.Database) {
+	newDbTx := chainDb.BeginTx()
+	if !newDbTx {
+		log.Error("db.BeginTx Error")
+		return
+	}
 	for _, v := range self.hashList {
 		err := chainDb.Delete(v)
 		if err != nil {
 			log.WithError(err).Error("chainDb.Delete Error")
 			continue
 		}
+	}
+	if err := chainDb.CommitTx(); err != nil {
+		log.WithError(err).Error("failed to commit db tx")
+		_err := chainDb.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
+		}
+		return
 	}
 	self.hashList = [][]byte{}
 }
@@ -166,17 +179,7 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 			return
 		}
 
-		for _, event := range events {
-			if currentBlockEventData.blockNum != 0 && currentBlockEventData.blockNum != event.BlockNum {
-				currentBlockEventData.DelLastBlockEventHash(rc.chainDb)
-				// save fromblock after finish one Block
-				err = rc.PutFromBlock(big.NewInt(int64(event.BlockNum)))
-				if err != nil {
-					log.WithError(err).Error("chainDb Has key Error.")
-					return
-				}
-			}
-
+		for i, event := range events {
 			// get event hash
 			key, value := rc.hashEvent(event)
 			// save event hash to currentdata
@@ -199,6 +202,17 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 			if err != nil {
 				log.WithError(err).Error("chainDb Put eventKey Error.")
 				return
+			}
+			fromBlock = big.NewInt(int64(event.BlockNum + 1))
+			isLastEvent := (i+1 == len(events))
+			if isLastEvent || (!isLastEvent && currentBlockEventData.blockNum != events[i+1].BlockNum) {
+				// save fromblock after finish one Block
+				err = rc.PutFromBlock(fromBlock)
+				if err != nil {
+					log.WithError(err).Error("chainDb Has key Error.")
+					return
+				}
+				currentBlockEventData.DelLastBlockEventHash(rc.chainDb)
 			}
 		}
 		time.Sleep(time.Second * 2)
