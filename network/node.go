@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	// "fmt"
 	"os"
-	"reflect"
 
 	"github.com/icstglobal/plasma/plasma"
 	"github.com/juju/errors"
@@ -93,7 +92,7 @@ func startHTTP() (*HTTPServer, error) {
 	}
 
 	cfg.CxAbi = string(abiStr)
-	log.Debugf("abi: %v %v\n", cfg.CxAbi, reflect.TypeOf(cxData.Abi))
+	// log.Debugf("abi: %v %v\n", cfg.CxAbi, reflect.TypeOf(cxData.Abi))
 
 	plasma, err := plasma.New(cfg)
 	if err != nil {

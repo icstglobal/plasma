@@ -160,7 +160,7 @@ func New(config *Config) (*Plasma, error) {
 	}
 
 	//dial eth chain
-	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr)
+	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr, pls.chainDb)
 	if err != nil {
 		return nil, err
 	}
