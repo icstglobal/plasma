@@ -49,11 +49,7 @@ type CurrentBlockEventData struct {
 	hashList [][]byte
 }
 
-func (self *CurrentBlockEventData) DelLastBlockEventHash(currentNum uint64, chainDb store.Database) {
-	if self.blockNum == currentNum {
-		return
-	}
-
+func (self *CurrentBlockEventData) DelLastBlockEventHash(chainDb store.Database) {
 	for _, v := range self.hashList {
 		err := chainDb.Delete(v)
 		if err != nil {
@@ -128,6 +124,11 @@ func (rc *RootChain) GetFromBlock() (*big.Int, error) {
 	return fromBlock, nil
 }
 
+func (rc *RootChain) PutFromBlock(fromBlock *big.Int) error {
+	//save fromBlock to db
+	return rc.chainDb.Put([]byte(FromBlockKey), fromBlock.Bytes())
+}
+
 // GetCurrentBlockEventData get currentBlockEventData from db.
 func (rc *RootChain) GetCurrentBlockEventData() (*CurrentBlockEventData, error) {
 	var currentBlockEventData *CurrentBlockEventData
@@ -192,10 +193,23 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 		}
 
 		for _, event := range events {
-			// filter repeat block
-			currentBlockEventData.DelLastBlockEventHash(event.BlockNum, rc.chainDb)
+			if currentBlockEventData.blockNum != 0 && currentBlockEventData.blockNum != event.BlockNum {
+				currentBlockEventData.DelLastBlockEventHash(rc.chainDb)
+				// save fromblock after finish one Block
+				err = rc.PutFromBlock(big.NewInt(int64(event.BlockNum)))
+				if err != nil {
+					log.WithError(err).Error("chainDb Has key Error.")
+					return
+				}
+			}
+
+			// get event hash
 			key, value := rc.hashEvent(event)
+			// save event hash to currentdata
+			currentBlockEventData.blockNum = event.BlockNum
+			currentBlockEventData.hashList = append(currentBlockEventData.hashList, key)
 			log.Debugf("event key hex: %v blockNumber:%v", hex.EncodeToString(key), event.BlockNum)
+			// filter repeat block
 			hasKey, err := rc.chainDb.Has(key)
 			if err != nil {
 				log.WithError(err).Error("chainDb Has key Error.")
@@ -212,25 +226,8 @@ func (rc *RootChain) loopEvent(eventName string, event interface{}) {
 				log.WithError(err).Error("chainDb Put eventKey Error.")
 				return
 			}
-			currentBlockEventData.blockNum = event.BlockNum
-			currentBlockEventData.hashList = append(currentBlockEventData.hashList, key)
-			err = rc.PutCurrentBlockEventData(currentBlockEventData)
-			if err != nil {
-				log.WithError(err).Error("chainDb PutCurrentBlockEventData Error.")
-				return
-			}
 		}
 		time.Sleep(time.Second * 2)
-		if len(events) > 0 {
-			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
-			//save fromBlock to db
-			err = rc.chainDb.Put([]byte(FromBlockKey), fromBlock.Bytes())
-			if err != nil {
-				log.WithError(err).Error("chainDb.Put FromBlock Error")
-				return
-			}
-
-		}
 	}
 }
 
