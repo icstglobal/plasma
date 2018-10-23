@@ -35,6 +35,9 @@ type RootChain struct {
 	abiStr string
 	cxAddr string
 	txsCh  chan types.Transactions
+
+	blockSubmiittedEventHandler BlockSubmiittedEventHandler
+	depositEventHandler         DepositEventHandler
 }
 
 type DepositEvent struct {
@@ -54,11 +57,11 @@ type BlockSubmittedEvent struct {
 
 // chain
 func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) {
-
 	client, err := ethclient.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect eth rpc endpoint {%v}, err is:%v", url, err)
 	}
+	log.WithFields(log.Fields{"url": url, "abi": abiStr, "contract addr": cxAddr}).Info("connected to root chain")
 	blc := eth.NewChainEthereum(client)
 	chain.Set(chain.Eth, blc)
 	rc := &RootChain{
@@ -84,11 +87,8 @@ func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) 
 	return rc, nil
 }
 
-func (rc *RootChain) SetTxsCh(txsCh chan types.Transactions) {
-	rc.txsCh = txsCh
-}
-
 func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
+	log.Debug("rootchain:loop events")
 	fromBlock := big.NewInt(100)
 
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
@@ -98,91 +98,53 @@ func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
 	}
 
 	for {
+		log.WithField("fromBlock", fromBlock).Debug("rootchain:try to get contract events")
 		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventTypes)
 		if err != nil {
 			log.Errorf("chain.GetEvents: %v", err)
 			return
 		}
-
+		log.WithField("count", len(events)).Debug("contract events returned from root chain")
 		for _, event := range events {
 			rc.sub[event.Name](event)
 		}
 		time.Sleep(time.Second * 2)
 		if len(events) > 0 {
 			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
+			log.WithField("fromBlock", fromBlock).Debug("loop events for next block")
 		}
 	}
 }
 
-// func (rc *RootChain) loopEvent(eventName string, event interface{}) {
-// 	fromBlock := big.NewInt(100)
-
-// 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
-// 	if err != nil {
-// 		log.Error("Decode cxAddr Error:", err)
-// 		return
-// 	}
-
-// 	for {
-// 		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventName, reflect.TypeOf(event))
-// 		if err != nil {
-// 			log.Errorf("chain.GetEvents: %v", err)
-// 			return
-// 		}
-
-// 		for _, event := range events {
-// 			rc.sub[eventName](event)
-// 		}
-// 		time.Sleep(time.Second * 2)
-// 		if len(events) > 0 {
-// 			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
-// 		}
-// 	}
-// }
-
 func (rc *RootChain) dealWithDepositEvent(event *chain.ContractEvent) error {
+	if rc.depositEventHandler == nil {
+		log.Warn("depositEventHandler is not registered")
+		return nil
+	}
+
 	out := event.V.(*DepositEvent)
-
-	// construct tx
-	txOut1 := &types.TxOut{Owner: out.Depositor, Amount: out.Amount}
-	txOut2 := &types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)}
-	txIn1 := &types.UTXO{
-		UTXOID: types.UTXOID{BlockNum: 0, TxIndex: 0, OutIndex: 0},
-		TxOut:  types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)},
-	}
-	txIn2 := &types.UTXO{
-		UTXOID: types.UTXOID{BlockNum: 0, TxIndex: 0, OutIndex: 0},
-		TxOut:  types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)},
-	}
-
-	fee := big.NewInt(1) // todo:fee
-	tx := types.NewTransaction(txIn1, txIn2, txOut1, txOut2, fee)
-
-	txs := make(types.Transactions, 0)
-	txs = append(txs, tx)
-	rc.txsCh <- txs
-
-	log.Debugf("dealWithDepositEvent: %v blockNumber: %v", out.Depositor.Hex(), event.BlockNum)
-
-	return nil
+	log.Debugf("RootChain.dealWithDepositEvent: %v rootChainBlockNumber: %v, depositBlock:%v, depositAmount:%v, depositorAddr:%v", out.Depositor.Hex(), event.BlockNum, out.DepositBlock, out.Amount, out.Depositor)
+	return rc.depositEventHandler(out.DepositBlock, out.Depositor, out.Token, out.Amount)
 }
 
-var blockSubmiittedEventHandler func(lastDepositBlockNum, currentBlockNum uint64) error
+func (rc *RootChain) RegisterDepositEventHandler(handler DepositEventHandler) {
+	rc.depositEventHandler = handler
+}
 
-func (rc *RootChain) RegisterBlockSubmittedEventHandler(handler func(lastDepositBlockNum, currentBlockNum uint64) error) {
-	blockSubmiittedEventHandler = handler
+func (rc *RootChain) RegisterBlockSubmittedEventHandler(handler BlockSubmiittedEventHandler) {
+	rc.blockSubmiittedEventHandler = handler
 }
 
 func (rc *RootChain) dealWithBlockSubmittedEvent(event *chain.ContractEvent) error {
-	if blockSubmiittedEventHandler == nil {
+	if rc.blockSubmiittedEventHandler == nil {
 		log.Warn("no BlockSubmiittedEvent Handler registered")
 		return nil
 	}
 
 	e := event.V.(*BlockSubmittedEvent)
-	lastDeposiBlockNum := e.LastDepositBlockNum.Uint64()
-	submittedBlockNum := e.SubmittedBlockNum.Uint64()
-	blockSubmiittedEventHandler(lastDeposiBlockNum, submittedBlockNum)
+	lastDeposiBlockNum := e.LastDepositBlockNum
+	submittedBlockNum := e.SubmittedBlockNum
+	rc.blockSubmiittedEventHandler(lastDeposiBlockNum, submittedBlockNum)
 
 	return nil
 }

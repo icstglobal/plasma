@@ -167,7 +167,6 @@ func New(config *Config) (*Plasma, error) {
 	// new operator
 	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), key.PrivateKey, us, pls.rootchain)
 	pls.operator.Start()
-	pls.rootchain.SetTxsCh(pls.operator.TxsCh)
 	return pls, nil
 }
 

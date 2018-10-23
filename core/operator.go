@@ -69,6 +69,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 	}
 	// complete block submit when we get the BlockSubmittedEvent from root chain
 	rootchain.RegisterBlockSubmittedEventHandler(oper.completeBlockSubmit)
+	rootchain.RegisterDepositEventHandler(oper.handleDepositEvent)
 	currentBlockNum := chain.CurrentHeader().Number.Uint64()
 	// head bock is non-deposit block
 	if currentBlockNum%childBlockInterval == 0 {
@@ -93,17 +94,10 @@ func (o *Operator) Start() {
 
 func (o *Operator) processTxs() {
 	for txs := range o.TxsCh {
-		if txs[0].IsDepositTx() {
-			err := o.SealDeposit(txs)
-			if err != nil {
-				log.Error("operator seal deposit block error:", err.Error())
-			}
-		} else {
-			log.Debug("processTxs Seal", txs)
-			err := o.Seal(txs)
-			if err != nil {
-				log.Error("operator seal block error:", err.Error())
-			}
+		log.Debug("processTxs Seal", txs)
+		err := o.Seal(txs)
+		if err != nil {
+			log.Error("operator seal block error:", err.Error())
 		}
 	}
 
@@ -214,8 +208,8 @@ func (o *Operator) Seal(txs types.Transactions) error {
 }
 
 // SealDeposit get txs from txpool and construct block, then seal the block
-func (o *Operator) SealDeposit(txs types.Transactions) error {
-	block := o.constructBlock(txs)
+func (o *Operator) SealDeposit(depositBlockNum *big.Int, tx *types.Transaction) error {
+	block := o.constructDepositBlock(depositBlockNum, tx)
 	newDbTx := o.chain.db.BeginTx()
 	if !newDbTx {
 		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
@@ -267,7 +261,7 @@ func (o *Operator) SealDeposit(txs types.Transactions) error {
 	return nil
 }
 
-func (o *Operator) constructDepositBlock(txs types.Transactions) *types.Block {
+func (o *Operator) constructDepositBlock(depositBlockNum *big.Int, tx *types.Transaction) *types.Block {
 	// header
 	parent := o.chain.CurrentBlock()
 	num := parent.Number()
@@ -275,11 +269,33 @@ func (o *Operator) constructDepositBlock(txs types.Transactions) *types.Block {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   o.Addr,
-		Number:     num.Add(num, common.Big1),
+		Number:     depositBlockNum,
 		Time:       big.NewInt(time.Now().Unix()),
 	}
 
+	txs := []*types.Transaction{tx}
 	return types.NewBlock(header, txs)
+}
+
+func (o *Operator) handleDepositEvent(depositBlockNum *big.Int, depositor, token common.Address, amount *big.Int) error {
+	//TODO: token is not used yet. It will be include for supporting ERC 20 token.
+
+	// construct tx
+	txOut1 := &types.TxOut{Owner: depositor, Amount: amount}
+	txOut2 := &types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)}
+	txIn1 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 0, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)},
+	}
+	txIn2 := &types.UTXO{
+		UTXOID: types.UTXOID{BlockNum: 0, TxIndex: 0, OutIndex: 0},
+		TxOut:  types.TxOut{Owner: common.Address{}, Amount: big.NewInt(0)},
+	}
+
+	fee := big.NewInt(1) // todo:fee
+	tx := types.NewTransaction(txIn1, txIn2, txOut1, txOut2, fee)
+	// depositBlock := o.constructDepositBlock(depositBlockNum, []*types.Transaction{tx})
+	return o.SealDeposit(depositBlockNum, tx)
 }
 
 // construct non-deposit block
@@ -301,10 +317,10 @@ func (o *Operator) SubmitBlock(block *types.Block) error {
 	return o.rootchain.SubmitBlock(block, o.privateKey)
 }
 
-func (o *Operator) completeBlockSubmit(lastBlockNum, submittedBlockNum uint64) error {
+func (o *Operator) completeBlockSubmit(lastBlockNum, submittedBlockNum *big.Int) error {
 	//TODO: can we simply get block by num?
 	b := o.chain.CurrentBlock()
-	if b.NumberU64() != submittedBlockNum {
+	if b.Number().Cmp(submittedBlockNum) != 0 {
 		err := errors.New("can only complete the submit of current block. This could be caused by wrong order of 'BlockSubmittedEvent'")
 		log.WithError(err).Error("failed to complete block submit")
 		return err
@@ -314,7 +330,7 @@ func (o *Operator) completeBlockSubmit(lastBlockNum, submittedBlockNum uint64) e
 	* upadte parent hash of current block
 	* broadcast current block
 	 */
-	lastDepositBlock := o.chain.GetBlockByNumber(lastBlockNum)
+	lastDepositBlock := o.chain.GetBlockByNumber(lastBlockNum.Uint64())
 	if lastDepositBlock == nil {
 		err := fmt.Errorf("block not found by num:%v", lastBlockNum)
 		log.WithError(err).Error("can not found last deposit block")
