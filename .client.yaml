@@ -1,0 +1,22 @@
+rpcserver:
+  proto: tcp
+  port: 8000
+
+httpserver:
+  url: "http://localhost:8080/"
+
+logger:
+  # debug,info,warn,error,fatal,panic
+  level: debug
+
+plasma:
+  chainID: 1
+
+rootchain:
+    url: http://119.28.248.204:8546
+    cxAddr: "69ffeeb6e90154ad30435d99e980c54a23b3bd40" 
+    cxFileName: "rootchain/deploy/contract_data/RootChain.json" 
+
+account:
+    keyfile: "keystore/UTC--2018-06-11T02-18-08.267635040Z--85d6e595a3e64d3353b888bc49ee27f1b9f2a656"
+    pwd: "wzp"

@@ -159,8 +159,8 @@ func (rc *RootChain) PutFromBlock(fromBlock *big.Int) error {
 func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
 	log.Debug("rootchain:loop events")
 	//TODO: for local test only
-	// fromBlock := big.NewInt(100)
-	fromBlock, err := rc.GetFromBlock()
+	fromBlock := big.NewInt(100)
+	// fromBlock, err := rc.GetFromBlock()
 	log.Debugf("fromBlock:%v", fromBlock)
 
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
