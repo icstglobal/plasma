@@ -3,10 +3,13 @@ package core
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
+	"github.com/icstglobal/plasma/store"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -20,24 +23,59 @@ import (
 
 	"reflect"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 const (
-	DepositEventName        = "Deposit"
-	ExitedStartEventName    = "ExistedStart"
-	BlockSubmittedEventName = "BlockSubmitted"
-	SubmitBlockMethodName   = "submitBlock"
+	DepositEventName         = "Deposit"
+	ExitedStartEventName     = "ExistedStart"
+	BlockSubmittedEventName  = "BlockSubmitted"
+	SubmitBlockMethodName    = "submitBlock"
+	FromBlockKey             = "RootChain.FromBlock"
+	CurrentBlockEventDataKey = "RootChain.CurrentBlockEventData"
 )
 
 type RootChain struct {
-	chain  chain.Chain
-	sub    map[string]func(event *chain.ContractEvent) error // map topic0 to name
-	abiStr string
-	cxAddr string
-	txsCh  chan types.Transactions
+	chain     chain.Chain
+	sub       map[string]func(event *chain.ContractEvent) error // map topic0 to name
+	abiStr    string
+	cxAddr    string
+	txsCh     chan types.Transactions
+	fromBlock int64
+	chainDb   store.Database // Block chain database
 
 	blockSubmiittedEventHandler BlockSubmiittedEventHandler
 	depositEventHandler         DepositEventHandler
+}
+
+type CurrentBlockEventData struct {
+	blockNum uint64
+	hashList [][]byte
+}
+
+func (self *CurrentBlockEventData) DelLastBlockEventHash(chainDb store.Database) {
+	newDbTx := chainDb.BeginTx()
+	if !newDbTx {
+		log.Error("db.BeginTx Error")
+		return
+	}
+	for _, v := range self.hashList {
+		err := chainDb.Delete(v)
+		if err != nil {
+			log.WithError(err).Error("chainDb.Delete Error")
+			continue
+		}
+	}
+	if err := chainDb.CommitTx(); err != nil {
+		log.WithError(err).Error("failed to commit db tx")
+		_err := chainDb.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
+		}
+		return
+	}
+	self.hashList = [][]byte{}
 }
 
 type DepositEvent struct {
@@ -56,7 +94,9 @@ type BlockSubmittedEvent struct {
 }
 
 // chain
-func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) {
+func NewRootChain(url string, abiStr string, cxAddr string, chainDb store.Database) (*RootChain, error) {
+
+	fromBlock := viper.GetInt64("rootchain.fromBlock")
 	client, err := ethclient.Dial(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect eth rpc endpoint {%v}, err is:%v", url, err)
@@ -65,10 +105,12 @@ func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) 
 	blc := eth.NewChainEthereum(client)
 	chain.Set(chain.Eth, blc)
 	rc := &RootChain{
-		chain:  blc,
-		sub:    make(map[string]func(event *chain.ContractEvent) error),
-		abiStr: abiStr,
-		cxAddr: cxAddr,
+		chain:     blc,
+		sub:       make(map[string]func(event *chain.ContractEvent) error),
+		abiStr:    abiStr,
+		cxAddr:    cxAddr,
+		chainDb:   chainDb,
+		fromBlock: fromBlock,
 	}
 	// register dealing func
 	rc.sub[DepositEventName] = rc.dealWithDepositEvent
@@ -81,19 +123,54 @@ func NewRootChain(url string, abiStr string, cxAddr string) (*RootChain, error) 
 		BlockSubmittedEventName: reflect.TypeOf(BlockSubmittedEvent{}),
 	}
 	go rc.loopEvents(eventTypes)
-	// go rc.loopEvent(DepositEventName, depositEvent)
 	// go rc.loopEvent(ExitedStartEventName)
 
 	return rc, nil
 }
 
+// GetFromBlock get fromBlock from db. if not exist, get it from config.
+func (rc *RootChain) GetFromBlock() (*big.Int, error) {
+	var fromBlock *big.Int
+	hasFromBlock, err := rc.chainDb.Has([]byte(FromBlockKey))
+	if err != nil {
+		log.WithError(err).Error("chainDb Has key Error.")
+		return nil, err
+	}
+	if hasFromBlock {
+		fromBlockBytes, err := rc.chainDb.Get([]byte(FromBlockKey))
+		if err != nil {
+			log.WithError(err).Error("chainDb Get FromBlock Error.")
+			return nil, err
+		}
+		fromBlock = new(big.Int).SetBytes(fromBlockBytes)
+
+	} else {
+		fromBlock = big.NewInt(rc.fromBlock)
+	}
+	return fromBlock, nil
+}
+
+//PutFromBlock save fromBlock to db
+func (rc *RootChain) PutFromBlock(fromBlock *big.Int) error {
+
+	return rc.chainDb.Put([]byte(FromBlockKey), fromBlock.Bytes())
+}
+
 func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
 	log.Debug("rootchain:loop events")
-	fromBlock := big.NewInt(100)
+	//TODO: for local test only
+	// fromBlock := big.NewInt(100)
+	fromBlock, err := rc.GetFromBlock()
+	log.Debugf("fromBlock:%v", fromBlock)
 
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
 	if err != nil {
 		log.Error("Decode cxAddr Error:", err)
+		return
+	}
+	currentBlockEventData := new(CurrentBlockEventData)
+	if err != nil {
+		log.Errorf("chain.GetCurrentBlockEventData: %v", err)
 		return
 	}
 
@@ -105,14 +182,44 @@ func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
 			return
 		}
 		log.WithField("count", len(events)).Debug("contract events returned from root chain")
-		for _, event := range events {
+		for i, event := range events {
+			// get event hash
+			key, value := rc.hashEvent(event)
+			// save event hash to currentdata
+			currentBlockEventData.blockNum = event.BlockNum
+			currentBlockEventData.hashList = append(currentBlockEventData.hashList, key)
+			log.Debugf("event key hex: %v blockNumber:%v", hex.EncodeToString(key), event.BlockNum)
+			// filter repeat block
+			hasKey, err := rc.chainDb.Has(key)
+			if err != nil {
+				log.WithError(err).Error("chainDb Has key Error.")
+				return
+			}
+			if hasKey {
+				log.Warn("repeat event occured.")
+				continue
+			}
 			rc.sub[event.Name](event)
+			// save event to db
+			err = rc.chainDb.Put(key, value)
+			if err != nil {
+				log.WithError(err).Error("chainDb Put eventKey Error.")
+				return
+			}
+			isLastEvent := (i+1 == len(events))
+			if isLastEvent || currentBlockEventData.blockNum != events[i+1].BlockNum {
+				fromBlock = big.NewInt(int64(event.BlockNum + 1))
+				log.WithField("fromBlock", fromBlock).Debug("loop events for next block")
+				// save fromblock after finish one Block
+				err = rc.PutFromBlock(fromBlock)
+				if err != nil {
+					log.WithError(err).Error("chainDb Has key Error.")
+					return
+				}
+				currentBlockEventData.DelLastBlockEventHash(rc.chainDb)
+			}
 		}
 		time.Sleep(time.Second * 2)
-		if len(events) > 0 {
-			fromBlock = big.NewInt(int64(events[len(events)-1].BlockNum) + 1)
-			log.WithField("fromBlock", fromBlock).Debug("loop events for next block")
-		}
 	}
 }
 
@@ -151,6 +258,18 @@ func (rc *RootChain) dealWithBlockSubmittedEvent(event *chain.ContractEvent) err
 
 func (rc *RootChain) dealWithExitStartedEvent(event *chain.ContractEvent) error {
 	return nil
+}
+
+func (rc *RootChain) hashEvent(event *chain.ContractEvent) ([]byte, []byte) {
+	jsonBytes, err := json.Marshal(&event)
+	if err != nil {
+		log.WithError(err).Error("json.Marshal Error.")
+		return nil, nil
+	}
+
+	// log.Debugf("event: %#v\n, %#v", event, string(jsonBytes))
+	md5Bytes := md5.Sum(jsonBytes)
+	return md5Bytes[:], jsonBytes
 }
 
 func (rc *RootChain) PubKeyToAddress(privateKey *ecdsa.PrivateKey) []byte {
