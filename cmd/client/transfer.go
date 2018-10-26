@@ -106,8 +106,9 @@ func send(tx *types.Transaction) {
 		log.WithError(err).Error("marshal tx as json failed")
 		return
 	}
-	body := bytes.NewBuffer(buf)
-	url := fmt.Sprintf("%s/%s", viper.GetString("httpserver.url"), "tx/new")
+
+	body := bytes.NewReader(buf)
+	url := fmt.Sprintf("%s%s", viper.GetString("httpserver.url"), "tx/new")
 	resp, err := http.Post(url, "application/json", body)
 	if err != nil {
 		log.WithError(err).WithField("url", url).Error("failed to send to remote http server")
