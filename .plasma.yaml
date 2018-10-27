@@ -5,6 +5,9 @@ rpcserver:
 httpserver:
   port: 8080
 
+p2pserver:
+  port: 4001
+
 logger:
   # debug,info,warn,error,fatal,panic
   level: debug
@@ -12,6 +15,7 @@ logger:
 plasma:
     datadir: testdata
     networkId: 1
+    bootstrapNodes:
 
 rootchain:
     operPwd: wzp

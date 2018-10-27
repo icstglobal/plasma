@@ -17,6 +17,7 @@ import (
 type Node struct {
 	rpc  *RPCServer
 	http *HTTPServer
+	p2p  *P2PServer
 }
 
 type CxData struct {
@@ -26,41 +27,6 @@ type CxData struct {
 
 //Start the node
 func (n *Node) Start() (err error) {
-	n.rpc, err = startRPC()
-	if err != nil {
-		return err
-	}
-
-	n.http, err = startHTTP()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func startRPC() (*RPCServer, error) {
-	proto := viper.GetString("rpcserver.proto")
-	port := viper.GetInt("rpcserver.port")
-	log.Info("try to start rpc server")
-	rpcCfg := RPCConfig{
-		Proto:   proto,
-		Port:    port,
-		Methods: calls(),
-	}
-	rpc, err := ServeRPC(rpcCfg)
-	if err != nil {
-		return nil, errors.Annotate(err, "failed to start rpc server")
-	}
-	log.WithFields(log.Fields{"proto": proto, "port": port}).Info("rpc server is running")
-
-	return rpc, nil
-}
-
-func startHTTP() (*HTTPServer, error) {
-	log.Info("try to start http server")
-	httpPort := viper.GetInt("httpserver.port")
-
 	datadir := viper.GetString("plasma.datadir")
 	networkId := viper.GetInt64("plasma.networkId")
 	chainUrl := viper.GetString("rootchain.url")
@@ -79,25 +45,62 @@ func startHTTP() (*HTTPServer, error) {
 	file, err := os.Open(cxFileName)
 	defer file.Close()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&cxData)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	abiStr, err := json.Marshal(cxData.Abi)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	cfg.CxAbi = string(abiStr)
 	// log.Debugf("abi: %v %v\n", cfg.CxAbi, reflect.TypeOf(cxData.Abi))
 
 	plasma, err := plasma.New(cfg)
+	n.rpc, err = startRPC(plasma)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	log.Debug("plasma:", plasma)
+
+	n.http, err = startHTTP(plasma)
+	if err != nil {
+		return err
+	}
+
+	n.p2p, err = startP2P(plasma)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func startRPC(plasma *plasma.Plasma) (*RPCServer, error) {
+	proto := viper.GetString("rpcserver.proto")
+	port := viper.GetInt("rpcserver.port")
+	log.Info("try to start rpc server")
+	rpcCfg := RPCConfig{
+		Proto:   proto,
+		Port:    port,
+		Methods: calls(),
+	}
+	rpc, err := ServeRPC(rpcCfg)
+	if err != nil {
+		return nil, errors.Annotate(err, "failed to start rpc server")
+	}
+	log.WithFields(log.Fields{"proto": proto, "port": port}).Info("rpc server is running")
+
+	return rpc, nil
+}
+
+func startHTTP(plasma *plasma.Plasma) (*HTTPServer, error) {
+	log.Info("try to start http server")
+	httpPort := viper.GetInt("httpserver.port")
 
 	http := &HTTPServer{
 		Port:   httpPort,
