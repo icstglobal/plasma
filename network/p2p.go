@@ -2,13 +2,12 @@ package network
 
 import (
 	"context"
-	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"github.com/icstglobal/plasma/core/types"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"io"
-	mrand "math/rand"
+	// "io"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -23,6 +22,7 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	protocol "github.com/libp2p/go-libp2p-protocol"
 	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+	msgio "github.com/libp2p/go-msgio"
 	ma "github.com/multiformats/go-multiaddr"
 	"gopkg.in/fatih/set.v0"
 )
@@ -65,21 +65,15 @@ func bootstrapConnect(ctx context.Context, host host.Host) error {
 
 // makeRoutedHost creates a LibP2P host with a random peer ID listening on the
 // given multiaddress. It will use secio if secio is true.
-func makeRoutedHost(listenPort int, randseed int64) (host.Host, error) {
+func makeRoutedHost(listenPort int) (host.Host, error) {
 	// If the seed is zero, use real cryptographic randomness. Otherwise, use a
 	// deterministic randomness source to make generated keys stay the same
 	// across multiple runs
-	var r io.Reader
-	if randseed == 0 {
-		r = rand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(randseed))
-	}
-	ctx := context.Background()
 
-	// Generate a key pair for this host. We will use it at least
-	// to obtain a valid host ID.
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
+	privKeyStr := viper.GetString("plasma.privKey")
+	privKeyByte, err := base64.StdEncoding.DecodeString(privKeyStr)
+	priv, err := crypto.UnmarshalPrivateKey(privKeyByte)
+
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +87,7 @@ func makeRoutedHost(listenPort int, randseed int64) (host.Host, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx := context.Background()
 
 	// Make the DHT
 	dht := dht.NewDHT(ctx, basicHost, nil)
@@ -122,7 +117,7 @@ func makeRoutedHost(listenPort int, randseed int64) (host.Host, error) {
 func startP2P(plasma *plasma.Plasma) (*P2PServer, error) {
 	port := viper.GetInt("p2pserver.port")
 	// Make a host that listens on the given multiaddress
-	ha, err := makeRoutedHost(port, 0)
+	ha, err := makeRoutedHost(port)
 	if err != nil {
 		log.Fatal(err)
 		return nil, err
@@ -147,6 +142,7 @@ type RemotePeer struct {
 }
 
 func (peer P2PServer) SendMsg(proto string, peerid ipeer.ID, data interface{}) error {
+	log.WithField("proto", proto).Debugf("SendMsg peer:%v", peerid)
 	bytes, err := rlp.EncodeToBytes(data)
 	if err != nil {
 		return err
@@ -155,26 +151,28 @@ func (peer P2PServer) SendMsg(proto string, peerid ipeer.ID, data interface{}) e
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	_, err = s.Write(bytes)
-	return err
+	writer := msgio.NewWriter(s)
+	return writer.WriteMsg(bytes)
 }
 
-func (peer P2PServer) Decode(r io.Reader, out interface{}) error {
-	return rlp.Decode(r, out)
+func (peer P2PServer) Decode(data []byte, out interface{}) error {
+	return rlp.DecodeBytes(data, out)
 }
 
 func (peer P2PServer) PeerIDsWithoutTx(hash common.Hash) []ipeer.ID {
+	log.WithField("hash", hash).Debug("PeerIDsWithoutTx")
 	peerIds := make([]ipeer.ID, 0)
 	for _, remotepeer := range peer.Peers {
 		if !remotepeer.KnownTxs.Has(hash) {
 			peerIds = append(peerIds, remotepeer.peerid)
 		}
 	}
+	log.WithField("peerIds", peerIds).Debug("PeerIDsWithoutTx")
 	return peerIds
 
 }
 func (peer P2PServer) MarkTxs(peerid ipeer.ID, txs types.Transactions) {
+	log.WithField("peerid", peerid).Debug("MarkTxs")
 	remotePeer, ok := peer.Peers[peerid]
 	if !ok {
 		return

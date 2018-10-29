@@ -433,6 +433,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 
 	// notify other subsystem about the new tx
 	go pool.txFeed.Send(NewTxsEvent{[]*types.Transaction{tx}})
+	log.Debug("add new tx")
 	// add new tx
 	pool.newTxs <- []*types.Transaction{tx}
 
@@ -520,6 +521,7 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 	// Add the batch of transaction, tracking the accepted ones
 	errs := make([]error, len(txs))
 
+	log.Debug("addTxsLocked", len(txs))
 	for i, tx := range txs {
 		errs[i] = pool.add(tx, local)
 	}

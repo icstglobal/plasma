@@ -4,9 +4,10 @@ import (
 	"github.com/icstglobal/plasma/core/types"
 	"github.com/icstglobal/plasma/plasma"
 	// host "github.com/libp2p/go-libp2p-host"
-	"bufio"
+	// "bufio"
 	inet "github.com/libp2p/go-libp2p-net"
 	ipeer "github.com/libp2p/go-libp2p-peer"
+	msgio "github.com/libp2p/go-msgio"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -30,14 +31,17 @@ func NewTxHandler(peer Peer, pls *plasma.Plasma) *TxHandler {
 // recevTx handles received transactions
 func (handler *TxHandler) recvTxs(s inet.Stream) {
 	log.Debug("recvTxs")
-	txs := make([]*types.Transaction, 0)
-	out := &types.Transactions{}
-	err := handler.peer.Decode(bufio.NewReader(s), out)
+	var txs []*types.Transaction
+	reader := msgio.NewReader(s)
+	bytes, err := reader.ReadMsg()
+	log.Debugf("recv msg: %v", bytes)
+	err = handler.peer.Decode(bytes, &txs)
 	if err != nil {
 		log.WithError(err).Error("recvTxs Decode Error!")
 		return
 	}
 
+	log.Debugf("recv txs: %v", txs)
 	// mark known tx
 	handler.peer.MarkTxs(s.Conn().RemotePeer(), txs)
 
@@ -48,8 +52,6 @@ func (handler *TxHandler) recvTxs(s inet.Stream) {
 func (handler *TxHandler) broadcastTxs() {
 	log.Debug("broadcastTxs")
 	// loop peers to send txs
-	peers := handler.peer.Peerstore().Peers()
-	log.Debug("peers:%v", peers, handler.pls)
 	txsCh := handler.pls.TxPool().NewTxsChannel()
 	for {
 		select {
