@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	crypto "github.com/libp2p/go-libp2p-crypto"
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 func main() {
@@ -19,6 +20,12 @@ func main() {
 		fmt.Errorf("%v\n", err)
 		return
 	}
-	fmt.Printf("%v\n", base64.StdEncoding.EncodeToString(privkeyb))
+	fmt.Printf("privkey: %v\n", base64.StdEncoding.EncodeToString(privkeyb))
+	peerid, err := peer.IDFromPrivateKey(priv)
+	if err != nil {
+		fmt.Errorf("%v\n", err)
+		return
+	}
+	fmt.Printf("peerid: %v\n", peerid.Pretty())
 
 }

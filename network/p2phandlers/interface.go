@@ -8,7 +8,7 @@ import (
 	// "io"
 )
 
-type Peer interface {
+type Host interface {
 	host.Host
 	SendMsg(proto string, peerid ipeer.ID, data interface{}) error
 	Decode(data []byte, out interface{}) error

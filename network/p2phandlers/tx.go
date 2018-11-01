@@ -17,13 +17,13 @@ const (
 
 // TxHandler is a container for tx related handlers
 type TxHandler struct {
-	peer Peer
+	host Host
 	pls  *plasma.Plasma
 }
 
-func NewTxHandler(peer Peer, pls *plasma.Plasma) *TxHandler {
-	txHandler := &TxHandler{peer: peer, pls: pls}
-	peer.SetStreamHandler(txProto, txHandler.recvTxs)
+func NewTxHandler(host Host, pls *plasma.Plasma) *TxHandler {
+	txHandler := &TxHandler{host: host, pls: pls}
+	host.SetStreamHandler(txProto, txHandler.recvTxs)
 	go txHandler.broadcastTxs()
 	return txHandler
 }
@@ -35,7 +35,7 @@ func (handler *TxHandler) recvTxs(s inet.Stream) {
 	reader := msgio.NewReader(s)
 	bytes, err := reader.ReadMsg()
 	log.Debugf("recv msg: %v", bytes)
-	err = handler.peer.Decode(bytes, &txs)
+	err = handler.host.Decode(bytes, &txs)
 	if err != nil {
 		log.WithError(err).Error("recvTxs Decode Error!")
 		return
@@ -43,7 +43,7 @@ func (handler *TxHandler) recvTxs(s inet.Stream) {
 
 	log.Debugf("recv txs: %v", txs)
 	// mark known tx
-	handler.peer.MarkTxs(s.Conn().RemotePeer(), txs)
+	handler.host.MarkTxs(s.Conn().RemotePeer(), txs)
 
 	handler.pls.TxPool().AddRemotes(txs)
 }
@@ -60,14 +60,14 @@ func (handler *TxHandler) broadcastTxs() {
 
 			// Broadcast transactions to a batch of peers not knowing about it
 			for _, tx := range txs {
-				peerids := handler.peer.PeerIDsWithoutTx(tx.Hash())
+				peerids := handler.host.PeerIDsWithoutTx(tx.Hash())
 				for _, peerid := range peerids {
 					txset[peerid] = append(txset[peerid], tx)
 				}
 				log.Debug("Broadcast transaction", "hash", tx.Hash(), "recipients", len(peerids))
 			}
 			for peerid, txs := range txset {
-				handler.peer.SendMsg(txProto, peerid, txs)
+				handler.host.SendMsg(txProto, peerid, txs)
 			}
 		}
 	}

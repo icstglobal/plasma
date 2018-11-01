@@ -17,7 +17,7 @@ import (
 type Node struct {
 	rpc  *RPCServer
 	http *HTTPServer
-	p2p  *P2PServer
+	p2p  *P2PLocalHost
 }
 
 type CxData struct {

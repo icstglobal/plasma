@@ -27,17 +27,18 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-// P2PServer serves P2P requests
-type P2PServer struct {
+// LocalHost serves P2P requests
+type P2PLocalHost struct {
 	Port int
 	// Plasma *plasma.Plasma
 	// Chain  *core.BlockChain
 	host.Host
-	Peers map[ipeer.ID]*RemotePeer
+	RemotePeerCaches map[ipeer.ID]*RemotePeerCache
 }
 
 var (
-	p2pserver *P2PServer
+	localhost   *P2PLocalHost
+	maxKnownTxs = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
 )
 
 func bootstrapConnect(ctx context.Context, host host.Host) error {
@@ -114,8 +115,8 @@ func makeRoutedHost(listenPort int) (host.Host, error) {
 	return routedHost, nil
 }
 
-func startP2P(plasma *plasma.Plasma) (*P2PServer, error) {
-	port := viper.GetInt("p2pserver.port")
+func startP2P(plasma *plasma.Plasma) (*P2PLocalHost, error) {
+	port := viper.GetInt("localhost.port")
 	// Make a host that listens on the given multiaddress
 	ha, err := makeRoutedHost(port)
 	if err != nil {
@@ -123,31 +124,31 @@ func startP2P(plasma *plasma.Plasma) (*P2PServer, error) {
 		return nil, err
 	}
 
-	p2pserver = &P2PServer{Host: ha, Port: port, Peers: make(map[ipeer.ID]*RemotePeer)}
-	p2phandlers.NewTxHandler(p2pserver, plasma)
+	localhost = &P2PLocalHost{Host: ha, Port: port, RemotePeerCaches: make(map[ipeer.ID]*RemotePeerCache)}
+	p2phandlers.NewTxHandler(localhost, plasma)
 	ha.Network().SetConnHandler(connectHandler)
-	return p2pserver, nil
+	return localhost, nil
 }
 
 func connectHandler(conn inet.Conn) {
 	peerid := conn.RemotePeer()
 	log.WithField("peerid", peerid).Debug("connectHandler")
-	p2pserver.Peers[peerid] = &RemotePeer{peerid: peerid, KnownTxs: &set.Set{}}
+	localhost.RemotePeerCaches[peerid] = &RemotePeerCache{peerid: peerid, KnownTxs: &set.Set{}}
 }
 
-// RemotePeer
-type RemotePeer struct {
+// RemotePeerCache
+type RemotePeerCache struct {
 	peerid   ipeer.ID
 	KnownTxs *set.Set
 }
 
-func (peer P2PServer) SendMsg(proto string, peerid ipeer.ID, data interface{}) error {
+func (localhost P2PLocalHost) SendMsg(proto string, peerid ipeer.ID, data interface{}) error {
 	log.WithField("proto", proto).Debugf("SendMsg peer:%v", peerid)
 	bytes, err := rlp.EncodeToBytes(data)
 	if err != nil {
 		return err
 	}
-	s, err := peer.NewStream(context.Background(), peerid, protocol.ID(proto))
+	s, err := localhost.NewStream(context.Background(), peerid, protocol.ID(proto))
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -155,29 +156,33 @@ func (peer P2PServer) SendMsg(proto string, peerid ipeer.ID, data interface{}) e
 	return writer.WriteMsg(bytes)
 }
 
-func (peer P2PServer) Decode(data []byte, out interface{}) error {
+func (localhost P2PLocalHost) Decode(data []byte, out interface{}) error {
 	return rlp.DecodeBytes(data, out)
 }
 
-func (peer P2PServer) PeerIDsWithoutTx(hash common.Hash) []ipeer.ID {
+func (localhost P2PLocalHost) PeerIDsWithoutTx(hash common.Hash) []ipeer.ID {
 	log.WithField("hash", hash).Debug("PeerIDsWithoutTx")
 	peerIds := make([]ipeer.ID, 0)
-	for _, remotepeer := range peer.Peers {
-		if !remotepeer.KnownTxs.Has(hash) {
-			peerIds = append(peerIds, remotepeer.peerid)
+	for _, peercache := range localhost.RemotePeerCaches {
+		if !peercache.KnownTxs.Has(hash) {
+			peerIds = append(peerIds, peercache.peerid)
 		}
 	}
 	log.WithField("peerIds", peerIds).Debug("PeerIDsWithoutTx")
 	return peerIds
 
 }
-func (peer P2PServer) MarkTxs(peerid ipeer.ID, txs types.Transactions) {
+func (localhost P2PLocalHost) MarkTxs(peerid ipeer.ID, txs types.Transactions) {
 	log.WithField("peerid", peerid).Debug("MarkTxs")
-	remotePeer, ok := peer.Peers[peerid]
+	peercache, ok := localhost.RemotePeerCaches[peerid]
 	if !ok {
 		return
 	}
 	for _, tx := range txs {
-		remotePeer.KnownTxs.Add(tx.Hash())
+		for peercache.KnownTxs.Size() >= maxKnownTxs {
+			peercache.KnownTxs.Pop()
+		}
+		peercache.KnownTxs.Add(tx.Hash())
 	}
+
 }
