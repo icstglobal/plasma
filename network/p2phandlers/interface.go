@@ -13,5 +13,7 @@ type Host interface {
 	SendMsg(proto string, peerid ipeer.ID, data interface{}) error
 	Decode(data []byte, out interface{}) error
 	PeerIDsWithoutTx(hash common.Hash) []ipeer.ID
+	PeerIDsWithoutBlock(hash common.Hash) []ipeer.ID
 	MarkTxs(peerid ipeer.ID, txs types.Transactions)
+	MarkBlock(peerid ipeer.ID, block *types.Block)
 }

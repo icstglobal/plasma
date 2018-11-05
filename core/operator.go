@@ -45,8 +45,10 @@ type Operator struct {
 	rootchain *RootChain
 	utxoRD    UtxoReaderWriter
 
-	TxsCh chan types.Transactions
-	quit  chan struct{} // quit channel
+	TxsCh    chan types.Transactions
+	newBlock chan *types.Block
+	quit     chan struct{} // quit channel
+
 }
 
 // NewOperator creates a new operator
@@ -59,6 +61,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 		rootchain:  rootchain,
 		txPool:     pool,
 		TxsCh:      make(chan types.Transactions, 10),
+		newBlock:   make(chan *types.Block, 10),
 		quit:       make(chan struct{}),
 		utxoRD:     utxoRD,
 	}
@@ -106,7 +109,7 @@ func (o *Operator) start() {
 			if txs := o.txPool.Content(); len(txs) == 0 {
 				continue
 			} else {
-				log.Debugf("%v\n", "operator txs..")
+				log.Debugf("%v %v\n", "operator txs..", txs[0].Hash().Hex())
 				o.TxsCh <- txs
 			}
 		}
@@ -142,6 +145,9 @@ func (o *Operator) Seal(txs types.Transactions) error {
 		return err
 	}
 	o.chain.ReplaceHead(block)
+	// broadcast Block
+	o.newBlock <- block
+
 	// remove used utxo
 	for txIdx, tx := range block.Transactions() {
 		for _, in := range tx.GetInsCopy() {
@@ -278,4 +284,8 @@ func merkleProof(b *types.Block, txIdx uint32) [][]byte {
 	}
 	mtree := NewMerkleTree(hashs)
 	return mtree.Proof(int(txIdx))
+}
+
+func (o *Operator) NewBlockCh() chan *types.Block {
+	return o.newBlock
 }
