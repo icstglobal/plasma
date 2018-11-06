@@ -20,7 +20,7 @@ import (
 	// "crypto/ecdsa"
 	// "github.com/ethereum/go-ethereum/common"
 	"github.com/icstglobal/plasma/core/types"
-	// log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Operator a key element in plasma
@@ -35,18 +35,18 @@ type Validator struct {
 	quit     chan struct{} // quit channel
 	// the block number of non-deposit block on plasma, increased by "childBlockInterval"
 	currentChildBlock uint64
-	newBlock          chan *types.Block
+	newBlockCh        chan *types.Block
 }
 
 // NewOperator creates a new operator
 func NewValidator(chain *BlockChain, utxoRD UtxoReaderWriter, rootchain *RootChain) *Validator {
 	v := &Validator{
-		chain:     chain,
-		rootchain: rootchain,
-		NewTxsCh:  make(chan types.Transactions, 10),
-		newBlock:  make(chan *types.Block, 10),
-		quit:      make(chan struct{}),
-		utxoRD:    utxoRD,
+		chain:      chain,
+		rootchain:  rootchain,
+		NewTxsCh:   make(chan types.Transactions, 10),
+		newBlockCh: make(chan *types.Block, 10),
+		quit:       make(chan struct{}),
+		utxoRD:     utxoRD,
 	}
 	currentBlockNum := chain.CurrentHeader().Number.Uint64()
 	// head bock is non-deposit block
@@ -71,9 +71,25 @@ func (v *Validator) ProcessRemoteTxs(txs types.Transactions) {
 // ProcessRemoteBlock write block to chain
 // cache the block if block is not sequential
 func (v *Validator) ProcessRemoteBlock(block *types.Block) {
-
+	newDbTx := v.chain.db.BeginTx()
+	if !newDbTx {
+		log.Error("database race detected, there should be no tx pending when plasma operator commit a block")
+		return
+	}
+	if err := v.chain.WriteBlock(block); err != nil {
+		_err := v.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
+		}
+		return
+	}
+	v.newBlockCh <- block
 }
 
 func (v *Validator) GetNewTxsChannel() chan types.Transactions {
 	return v.NewTxsCh
+}
+
+func (v *Validator) GetNewBlockChannel() chan *types.Block {
+	return v.newBlockCh
 }

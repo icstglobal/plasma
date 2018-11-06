@@ -36,6 +36,7 @@ type Worker interface {
 	ProcessRemoteTxs(txs types.Transactions)
 	ProcessRemoteBlock(block *types.Block)
 	GetNewTxsChannel() chan types.Transactions
+	GetNewBlockChannel() chan *types.Block
 }
 
 // Plasma implements the Ethereum full node service.
@@ -332,4 +333,8 @@ func (s *Plasma) ProcessRemoteTxs(txs types.Transactions) {
 
 func (s *Plasma) GetNewTxsChannel() chan types.Transactions {
 	return s.worker.GetNewTxsChannel()
+}
+
+func (s *Plasma) GetNewBlockChannel() chan *types.Block {
+	return s.worker.GetNewBlockChannel()
 }

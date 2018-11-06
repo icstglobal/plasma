@@ -71,9 +71,9 @@ var TransferCmd = &cobra.Command{
 
 func makeTx() *types.Transaction {
 	in1 := &types.UTXO{UTXOID: types.UTXOID{BlockNum: blockNum, TxIndex: txIdx, OutIndex: outIdx}, TxOut: types.TxOut{Owner: common.BytesToAddress(from)}}
-	in2 := &types.UTXO{}
+	in2 := types.NewNullUTXO()
 	out1 := &types.TxOut{Owner: common.BytesToAddress(to), Amount: new(big.Int).SetUint64(amount)}
-	out2 := &types.TxOut{}
+	out2 := types.NewNullTxOut()
 	tx := types.NewTransaction(in1, in2, out1, out2, new(big.Int).SetUint64(fee))
 	return tx
 }

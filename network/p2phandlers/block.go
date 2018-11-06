@@ -50,15 +50,15 @@ func (handler *BlockHandler) recvBlock(s inet.Stream) {
 func (handler *BlockHandler) broadcastBlock() {
 	log.Debug("broadcastBlocks")
 	// loop peers to send txs
-	// newBlockCh := handler.pls.Operator().NewBlockCh()
-	// for {
-	// select {
-	// case newBlock := <-newBlockCh:
+	newBlockCh := handler.pls.GetNewBlockChannel()
+	for {
+		select {
+		case newBlock := <-newBlockCh:
 
-	// // Broadcast block to a batch of peers not knowing about it
-	// for _, peerid := range handler.host.PeerIDsWithoutBlock(newBlock.Hash()) {
-	// handler.host.SendMsg(blockProto, peerid, newBlock)
-	// }
-	// }
-	// }
+			// Broadcast block to a batch of peers not knowing about it
+			for _, peerid := range handler.host.PeerIDsWithoutBlock(newBlock.Hash()) {
+				handler.host.SendMsg(blockProto, peerid, newBlock)
+			}
+		}
+	}
 }

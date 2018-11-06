@@ -52,7 +52,7 @@ type Operator struct {
 	quit  chan struct{} // quit channel
 	// the block number of non-deposit block on plasma, increased by "childBlockInterval"
 	currentChildBlock uint64
-	newBlock          chan *types.Block
+	newBlockCh        chan *types.Block
 }
 
 // NewOperator creates a new operator
@@ -65,7 +65,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 		rootchain:  rootchain,
 		txPool:     pool,
 		TxsCh:      make(chan types.Transactions, 10),
-		newBlock:   make(chan *types.Block, 10),
+		newBlockCh: make(chan *types.Block, 10),
 		quit:       make(chan struct{}),
 		utxoRD:     utxoRD,
 	}
@@ -155,7 +155,7 @@ func (o *Operator) Seal(txs types.Transactions) error {
 	}
 	o.chain.ReplaceHead(block)
 	// broadcast Block
-	o.newBlock <- block
+	o.newBlockCh <- block
 
 	// remove used utxo
 	for txIdx, tx := range block.Transactions() {
@@ -359,10 +359,6 @@ func merkleProof(b *types.Block, txIdx uint32) [][]byte {
 	return mtree.Proof(int(txIdx))
 }
 
-func (o *Operator) NewBlockCh() chan *types.Block {
-	return o.newBlock
-}
-
 func (o *Operator) ProcessRemoteTxs(txs types.Transactions) {
 	o.txPool.AddRemotes(txs)
 }
@@ -372,4 +368,8 @@ func (o *Operator) ProcessRemoteBlock(block *types.Block) {
 
 func (o *Operator) GetNewTxsChannel() chan types.Transactions {
 	return o.txPool.NewTxsChannel()
+}
+
+func (o *Operator) GetNewBlockChannel() chan *types.Block {
+	return o.newBlockCh
 }
