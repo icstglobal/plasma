@@ -45,18 +45,14 @@ func (handler *TxHandler) recvTxs(s inet.Stream) {
 	// mark known tx
 	handler.host.MarkTxs(s.Conn().RemotePeer(), txs)
 
-	if handler.pls.Config().IsOperator {
-		handler.pls.TxPool().AddRemotes(txs)
-	} else {
-		handler.pls.TxPool().NewTxsChannel() <- txs
-	}
+	handler.pls.ProcessRemoteTxs(txs)
 }
 
 // broadcastTxs broadcast received valid tx
 func (handler *TxHandler) broadcastTxs() {
 	log.Debug("broadcastTxs")
 	// loop peers to send txs
-	txsCh := handler.pls.TxPool().NewTxsChannel()
+	txsCh := handler.pls.GetNewTxsChannel()
 	for {
 		select {
 		case txs := <-txsCh:

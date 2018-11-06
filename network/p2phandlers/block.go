@@ -44,23 +44,21 @@ func (handler *BlockHandler) recvBlock(s inet.Stream) {
 	// mark known block
 	handler.host.MarkBlock(s.Conn().RemotePeer(), block)
 	// write block to chain, cache the block if it's not sequential.
-	if !handler.pls.Config().IsOperator {
-	}
 }
 
 // broadcastBlocks broadcast received valid tx
 func (handler *BlockHandler) broadcastBlock() {
 	log.Debug("broadcastBlocks")
 	// loop peers to send txs
-	newBlockCh := handler.pls.Operator().NewBlockCh()
-	for {
-		select {
-		case newBlock := <-newBlockCh:
+	// newBlockCh := handler.pls.Operator().NewBlockCh()
+	// for {
+	// select {
+	// case newBlock := <-newBlockCh:
 
-			// Broadcast block to a batch of peers not knowing about it
-			for _, peerid := range handler.host.PeerIDsWithoutBlock(newBlock.Hash()) {
-				handler.host.SendMsg(blockProto, peerid, newBlock)
-			}
-		}
-	}
+	// // Broadcast block to a batch of peers not knowing about it
+	// for _, peerid := range handler.host.PeerIDsWithoutBlock(newBlock.Hash()) {
+	// handler.host.SendMsg(blockProto, peerid, newBlock)
+	// }
+	// }
+	// }
 }

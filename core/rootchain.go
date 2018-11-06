@@ -175,13 +175,13 @@ func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
 	}
 
 	for {
-		log.WithField("fromBlock", fromBlock).Debug("rootchain:try to get contract events")
+		// log.WithField("fromBlock", fromBlock).Debug("rootchain:try to get contract events")
 		events, err := rc.chain.GetContractEvents(context.Background(), cxAddrBytes, fromBlock, nil, rc.abiStr, eventTypes)
 		if err != nil {
 			log.Errorf("chain.GetEvents: %v", err)
 			return
 		}
-		log.WithField("count", len(events)).Debug("contract events returned from root chain")
+		// log.WithField("count", len(events)).Debug("contract events returned from root chain")
 		for i, event := range events {
 			// get event hash
 			key, value := rc.hashEvent(event)

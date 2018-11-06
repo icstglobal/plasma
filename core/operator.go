@@ -362,3 +362,14 @@ func merkleProof(b *types.Block, txIdx uint32) [][]byte {
 func (o *Operator) NewBlockCh() chan *types.Block {
 	return o.newBlock
 }
+
+func (o *Operator) ProcessRemoteTxs(txs types.Transactions) {
+	o.txPool.AddRemotes(txs)
+}
+
+func (o *Operator) ProcessRemoteBlock(block *types.Block) {
+}
+
+func (o *Operator) GetNewTxsChannel() chan types.Transactions {
+	return o.txPool.NewTxsChannel()
+}
