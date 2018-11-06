@@ -295,5 +295,6 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 		log.WithError(err).Error("sign tx")
 		return err
 	}
+	log.Debugf("SubmitBlock:%v", tx.Hex())
 	return rc.chain.ConfirmTrans(context.Background(), tx, sigBytes)
 }

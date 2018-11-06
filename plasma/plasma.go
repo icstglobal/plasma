@@ -258,6 +258,7 @@ func (s *Plasma) StartMining(local bool) error {
 
 func (s *Plasma) BlockChain() *core.BlockChain { return s.blockchain }
 func (s *Plasma) TxPool() *core.TxPool         { return s.txPool }
+func (s *Plasma) Operator() *core.Operator     { return s.operator }
 func (s *Plasma) EventMux() *event.TypeMux     { return s.eventMux }
 func (s *Plasma) Engine() consensus.Engine     { return s.engine }
 func (s *Plasma) ChainDb() store.Database      { return s.chainDb }

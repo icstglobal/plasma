@@ -142,9 +142,10 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
-	queue types.Transactions           // Queued but non-processable transactions
-	beats map[common.Address]time.Time // Last heartbeat from each known account
-	all   *txLookup                    // All transactions to allow lookups
+	queue  types.Transactions           // Queued but non-processable transactions
+	beats  map[common.Address]time.Time // Last heartbeat from each known account
+	all    *txLookup                    // All transactions to allow lookups
+	newTxs chan types.Transactions
 
 	wg sync.WaitGroup // for shutdown sync
 }
@@ -166,6 +167,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain Block
 		all:         newTxLookup(),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
 		txValidator: validator,
+		newTxs:      make(chan types.Transactions),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	// pool.reset(nil, chain.CurrentBlock().Header())
@@ -431,6 +433,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 
 	// notify other subsystem about the new tx
 	go pool.txFeed.Send(NewTxsEvent{[]*types.Transaction{tx}})
+	log.Debug("add new tx")
+	// add new tx
+	pool.newTxs <- []*types.Transaction{tx}
 
 	// Mark local addresses and journal local transactions
 	if local {
@@ -516,6 +521,7 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 	// Add the batch of transaction, tracking the accepted ones
 	errs := make([]error, len(txs))
 
+	log.Debug("addTxsLocked", len(txs))
 	for i, tx := range txs {
 		errs[i] = pool.add(tx, local)
 	}
@@ -554,6 +560,11 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 
 	// call the pointer verison method
 	(&(pool.queue)).Remove(txOffset)
+}
+
+// Count returns the current number of items in the lookup.
+func (pool *TxPool) NewTxsChannel() chan types.Transactions {
+	return pool.newTxs
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
