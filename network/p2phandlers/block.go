@@ -43,8 +43,9 @@ func (handler *BlockHandler) recvBlock(s inet.Stream) {
 	log.Debugf("recv block: %v", block)
 	// mark known block
 	handler.host.MarkBlock(s.Conn().RemotePeer(), block)
-
-	// handler.pls.TxPool().AddRemotes(txs)
+	// write block to chain, cache the block if it's not sequential.
+	if !handler.pls.Config().IsOperator {
+	}
 }
 
 // broadcastBlocks broadcast received valid tx

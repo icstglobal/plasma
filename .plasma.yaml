@@ -13,6 +13,7 @@ logger:
   level: debug
 
 plasma:
+    isOperator: true
     datadir: testdata
     networkId: 1
     bootstrapNodes:

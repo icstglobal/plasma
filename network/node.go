@@ -29,6 +29,7 @@ type CxData struct {
 func (n *Node) Start() (err error) {
 	datadir := viper.GetString("plasma.datadir")
 	networkId := viper.GetInt64("plasma.networkId")
+	isOperator := viper.GetBool("plasma.isOperator")
 	chainUrl := viper.GetString("rootchain.url")
 	cxAddr := viper.GetString("rootchain.cxAddr")
 	cxFileName := viper.GetString("rootchain.cxFileName")
@@ -40,6 +41,7 @@ func (n *Node) Start() (err error) {
 	cfg.ChainUrl = chainUrl
 	cfg.CxAddr = cxAddr
 	cfg.OperPwd = operPwd
+	cfg.IsOperator = isOperator
 	// read abi from json
 	cxData := new(CxData)
 	file, err := os.Open(cxFileName)
