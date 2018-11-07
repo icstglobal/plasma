@@ -16,13 +16,15 @@ const (
 
 // BlockHandler is a container for tx related handlers
 type BlockHandler struct {
-	host Host
-	pls  *plasma.Plasma
+	host       Host
+	pls        *plasma.Plasma
+	newBlockCh chan *types.Block
 }
 
 func NewBlockHandler(host Host, pls *plasma.Plasma) *BlockHandler {
-	blockHandler := &BlockHandler{host: host, pls: pls}
+	blockHandler := &BlockHandler{host: host, pls: pls, newBlockCh: make(chan *types.Block, 10)}
 	host.SetStreamHandler(blockProto, blockHandler.recvBlock)
+	blockHandler.pls.SubscribeNewBlockCh(blockHandler.newBlockCh)
 	go blockHandler.broadcastBlock()
 	return blockHandler
 }
@@ -50,10 +52,9 @@ func (handler *BlockHandler) recvBlock(s inet.Stream) {
 func (handler *BlockHandler) broadcastBlock() {
 	log.Debug("broadcastBlocks")
 	// loop peers to send txs
-	newBlockCh := handler.pls.GetNewBlockChannel()
 	for {
 		select {
-		case newBlock := <-newBlockCh:
+		case newBlock := <-handler.newBlockCh:
 
 			// Broadcast block to a batch of peers not knowing about it
 			for _, peerid := range handler.host.PeerIDsWithoutBlock(newBlock.Hash()) {

@@ -17,13 +17,15 @@ const (
 
 // TxHandler is a container for tx related handlers
 type TxHandler struct {
-	host Host
-	pls  *plasma.Plasma
+	host     Host
+	pls      *plasma.Plasma
+	newTxsCh chan types.Transactions
 }
 
 func NewTxHandler(host Host, pls *plasma.Plasma) *TxHandler {
-	txHandler := &TxHandler{host: host, pls: pls}
+	txHandler := &TxHandler{host: host, pls: pls, newTxsCh: make(chan types.Transactions, 10)}
 	host.SetStreamHandler(txProto, txHandler.recvTxs)
+	pls.SubscribeNewTxsCh(txHandler.newTxsCh)
 	go txHandler.broadcastTxs()
 	return txHandler
 }
@@ -52,10 +54,9 @@ func (handler *TxHandler) recvTxs(s inet.Stream) {
 func (handler *TxHandler) broadcastTxs() {
 	log.Debug("broadcastTxs")
 	// loop peers to send txs
-	txsCh := handler.pls.GetNewTxsChannel()
 	for {
 		select {
-		case txs := <-txsCh:
+		case txs := <-handler.newTxsCh:
 			var txset = make(map[ipeer.ID]types.Transactions)
 
 			// Broadcast transactions to a batch of peers not knowing about it

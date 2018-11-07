@@ -41,12 +41,11 @@ type Validator struct {
 // NewOperator creates a new operator
 func NewValidator(chain *BlockChain, utxoRD UtxoReaderWriter, rootchain *RootChain) *Validator {
 	v := &Validator{
-		chain:      chain,
-		rootchain:  rootchain,
-		NewTxsCh:   make(chan types.Transactions, 10),
-		newBlockCh: make(chan *types.Block, 10),
-		quit:       make(chan struct{}),
-		utxoRD:     utxoRD,
+		chain:     chain,
+		rootchain: rootchain,
+		NewTxsCh:  make(chan types.Transactions, 10),
+		quit:      make(chan struct{}),
+		utxoRD:    utxoRD,
 	}
 	currentBlockNum := chain.CurrentHeader().Number.Uint64()
 	// head bock is non-deposit block
@@ -83,13 +82,11 @@ func (v *Validator) ProcessRemoteBlock(block *types.Block) {
 		}
 		return
 	}
-	v.newBlockCh <- block
+	if v.newBlockCh != nil {
+		v.newBlockCh <- block
+	}
 }
 
-func (v *Validator) GetNewTxsChannel() chan types.Transactions {
-	return v.NewTxsCh
-}
-
-func (v *Validator) GetNewBlockChannel() chan *types.Block {
-	return v.newBlockCh
+func (v *Validator) SubscribeNewBlockCh(ch chan *types.Block) {
+	v.newBlockCh = ch
 }

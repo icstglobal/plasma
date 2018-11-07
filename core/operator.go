@@ -366,10 +366,6 @@ func (o *Operator) ProcessRemoteTxs(txs types.Transactions) {
 func (o *Operator) ProcessRemoteBlock(block *types.Block) {
 }
 
-func (o *Operator) GetNewTxsChannel() chan types.Transactions {
-	return o.txPool.NewTxsChannel()
-}
-
-func (o *Operator) GetNewBlockChannel() chan *types.Block {
-	return o.newBlockCh
+func (o *Operator) SubscribeNewBlockCh(ch chan *types.Block) {
+	o.newBlockCh = ch
 }

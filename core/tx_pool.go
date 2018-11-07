@@ -167,7 +167,6 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain Block
 		all:         newTxLookup(),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
 		txValidator: validator,
-		newTxs:      make(chan types.Transactions),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	// pool.reset(nil, chain.CurrentBlock().Header())
@@ -435,7 +434,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 	go pool.txFeed.Send(NewTxsEvent{[]*types.Transaction{tx}})
 	log.Debug("add new tx")
 	// add new tx
-	pool.newTxs <- []*types.Transaction{tx}
+	if pool.newTxs != nil {
+		pool.newTxs <- []*types.Transaction{tx}
+	}
 
 	// Mark local addresses and journal local transactions
 	if local {
@@ -562,9 +563,8 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	(&(pool.queue)).Remove(txOffset)
 }
 
-// Count returns the current number of items in the lookup.
-func (pool *TxPool) NewTxsChannel() chan types.Transactions {
-	return pool.newTxs
+func (pool *TxPool) SubscribeNewTxsCh(ch chan types.Transactions) {
+	pool.newTxs = ch
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
