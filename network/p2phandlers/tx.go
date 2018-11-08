@@ -65,7 +65,7 @@ func (handler *TxHandler) broadcastTxs() {
 				for _, peerid := range peerids {
 					txset[peerid] = append(txset[peerid], tx)
 				}
-				log.Debug("Broadcast transaction", "hash", tx.Hash(), "recipients", len(peerids))
+				log.Debug("Broadcast transaction", "hash", tx.Hash().Hex(), "recipients", len(peerids))
 			}
 			for peerid, txs := range txset {
 				handler.host.SendMsg(txProto, peerid, txs)

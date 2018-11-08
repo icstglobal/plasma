@@ -87,7 +87,7 @@ type DepositEvent struct {
 }
 
 type BlockSubmittedEvent struct {
-	Root                []byte
+	Root                [32]byte
 	LastDepositBlockNum *big.Int
 	SubmittedBlockNum   *big.Int
 	Time                *big.Int
@@ -284,6 +284,8 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 		"_root":    root,
 		"blockNum": block.Number(),
 	}
+	log.Debugf("SubmitBlock root %v", block.Header().TxHash.Hex())
+	return nil
 	tx, err := rc.chain.CallWithAbi(context.Background(), from, common.Hex2Bytes(rc.cxAddr), SubmitBlockMethodName, big.NewInt(0), callData, rc.abiStr)
 	if err != nil {
 		log.WithError(err).Error("submitblock callData", callData)

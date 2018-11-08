@@ -19,7 +19,7 @@ package core
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
+	// "fmt"
 	"math/big"
 	"time"
 
@@ -73,13 +73,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 	rootchain.RegisterBlockSubmittedEventHandler(oper.completeBlockSubmit)
 	rootchain.RegisterDepositEventHandler(oper.handleDepositEvent)
 	currentBlockNum := chain.CurrentHeader().Number.Uint64()
-	// head bock is non-deposit block
-	if currentBlockNum%childBlockInterval == 0 {
-		oper.currentChildBlock = currentBlockNum
-	} else {
-		// head block is deposit block
-		oper.currentChildBlock = ((currentBlockNum / childBlockInterval) + 1) * childBlockInterval
-	}
+	oper.currentChildBlock = currentBlockNum
 	return oper
 }
 
@@ -154,6 +148,7 @@ func (o *Operator) Seal(txs types.Transactions) error {
 		return err
 	}
 	o.chain.ReplaceHead(block)
+	o.currentChildBlock = block.NumberU64()
 	// broadcast Block
 	o.newBlockCh <- block
 
@@ -200,13 +195,10 @@ func (o *Operator) Seal(txs types.Transactions) error {
 		o.txPool.removeTx(hash, true)
 	}
 	// sumbit block every n blocks
-	log.Debug("block.NumberU64()%submitBlockInterval:", block.NumberU64()%submitBlockInterval)
-	if block.NumberU64()%submitBlockInterval == 0 {
-		err := o.SubmitBlock(block)
-		if err != nil {
-			log.WithError(err).Error("operator.SubmitBlock Error.")
-			return err
-		}
+	err := o.SubmitBlock(block)
+	if err != nil {
+		log.WithError(err).Error("operator.SubmitBlock Error.")
+		return err
 	}
 
 	return nil
@@ -229,6 +221,8 @@ func (o *Operator) SealDeposit(depositBlockNum *big.Int, tx *types.Transaction) 
 		return err
 	}
 	o.chain.ReplaceHead(block)
+	o.currentChildBlock = uint64(depositBlockNum.Int64())
+	o.newBlockCh <- block
 	// add deposit utxo to set
 	for txIdx, tx := range block.Transactions() {
 		for outIdx, out := range tx.GetOutsCopy() {
@@ -305,10 +299,11 @@ func (o *Operator) handleDepositEvent(depositBlockNum *big.Int, depositor, token
 
 // construct non-deposit block
 func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
+	nextChildBlock := (o.currentChildBlock/childBlockInterval + 1) * childBlockInterval
 	// header
 	header := &types.Header{
 		Coinbase: o.Addr,
-		Number:   new(big.Int).SetUint64(o.currentChildBlock),
+		Number:   new(big.Int).SetUint64(nextChildBlock),
 		Time:     big.NewInt(time.Now().Unix()),
 	}
 
@@ -317,33 +312,32 @@ func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
 
 // SubmitBlock write block hash to root chain
 func (o *Operator) SubmitBlock(block *types.Block) error {
-	//set next child block number
-	o.currentChildBlock += childBlockInterval
 	return o.rootchain.SubmitBlock(block, o.privateKey)
 }
 
 func (o *Operator) completeBlockSubmit(lastBlockNum, submittedBlockNum *big.Int) error {
 	//TODO: can we simply get block by num?
 	b := o.chain.CurrentBlock()
-	if b.Number().Cmp(submittedBlockNum) != 0 {
-		err := errors.New("can only complete the submit of current block. This could be caused by wrong order of 'BlockSubmittedEvent'")
-		log.WithError(err).Error("failed to complete block submit")
-		return err
-	}
+	log.Debugf("Number: %v submittedBlockNum: %v", b.Number().Int64(), submittedBlockNum.Int64())
+	// if b.Number().Cmp(submittedBlockNum) != 0 {
+	// err := errors.New("can only complete the submit of current block. This could be caused by wrong order of 'BlockSubmittedEvent'")
+	// log.WithError(err).Error("failed to complete block submit")
+	// return err
+	// }
 	/*
 	* get last block hash
 	* upadte parent hash of current block
 	* broadcast current block
 	 */
-	lastDepositBlock := o.chain.GetBlockByNumber(lastBlockNum.Uint64())
-	if lastDepositBlock == nil {
-		err := fmt.Errorf("block not found by num:%v", lastBlockNum)
-		log.WithError(err).Error("can not found last deposit block")
-		return err
-	}
+	// lastDepositBlock := o.chain.GetBlockByNumber(lastBlockNum.Uint64())
+	// if lastDepositBlock == nil {
+	// err := fmt.Errorf("block not found by num:%v", lastBlockNum)
+	// log.WithError(err).Error("can not found last deposit block")
+	// return err
+	// }
 	//build the link from current non-deposit block to the last deposit block before it
-	b.Header().ParentHash = lastDepositBlock.Hash()
-	o.chain.WriteBlock(b) //update the block data
+	// b.Header().ParentHash = lastDepositBlock.Hash()
+	// o.chain.WriteBlock(b) //update the block data
 	//TODO: broadcast block
 	return nil
 }

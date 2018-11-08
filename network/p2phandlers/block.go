@@ -42,10 +42,16 @@ func (handler *BlockHandler) recvBlock(s inet.Stream) {
 		return
 	}
 
-	log.Debugf("recv block: %v", block)
+	log.Debugf("recv block: %v TxHash: %v Number:%v", block, block.Header().TxHash.Hex(), block.Header().Number.Int64())
 	// mark known block
 	handler.host.MarkBlock(s.Conn().RemotePeer(), block)
 	// write block to chain, cache the block if it's not sequential.
+	err = handler.pls.BlockChain().WriteBlock(block)
+	if err != nil {
+		log.WithError(err).Error("recvBlock WriteBlock Error")
+		return
+	}
+
 }
 
 // broadcastBlocks broadcast received valid tx

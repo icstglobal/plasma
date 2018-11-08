@@ -120,10 +120,10 @@ contract RootChain {
             timestamp: block.timestamp
         });
 
+        emit BlockSubmitted(_root, currentDepositBlock, currentChildBlock, block.timestamp);
         // Update block numbers.
         currentChildBlock = currentChildBlock.add(CHILD_BLOCK_INTERVAL);
 
-        emit BlockSubmitted(_root, currentDepositBlock, currentChildBlock, block.timestamp);
 
         currentDepositBlock = 1;
     }
