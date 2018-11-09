@@ -61,6 +61,7 @@ contract RootChain {
     uint256 public currentFeeExit;
 
     mapping (uint256 => ChildBlock) public childChain;
+    uint256[] public blockNums;
     mapping (uint256 => Exit) public exits;
     mapping (address => address) public exitsQueues;
 
@@ -102,6 +103,9 @@ contract RootChain {
         exitsQueues[address(0)] = address(new PriorityQueue());
     }
 
+    function getBlockCount() public constant returns(uint count) {
+        return blockNums.length;
+    }
 
     /*
      * Public Functions
@@ -121,6 +125,7 @@ contract RootChain {
         });
 
         emit BlockSubmitted(_root, currentDepositBlock, currentChildBlock, block.timestamp);
+        blockNums.push(currentChildBlock);
         // Update block numbers.
         currentChildBlock = currentChildBlock.add(CHILD_BLOCK_INTERVAL);
 
@@ -144,6 +149,7 @@ contract RootChain {
             root: root,
             timestamp: block.timestamp
         });
+        blockNums.push(depositBlock);
         currentDepositBlock = currentDepositBlock.add(1);
 
         emit Deposit(msg.sender, depositBlock, address(0), msg.value);

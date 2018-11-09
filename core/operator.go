@@ -19,7 +19,6 @@ package core
 import (
 	"crypto/ecdsa"
 	"errors"
-	// "fmt"
 	"math/big"
 	"time"
 
@@ -134,12 +133,44 @@ func (o *Operator) Stop() {
 // Non-Deposit block will not be broadcasted to p2p network immediately, instead we need to wait for `BlockSubmittedEvent` and `completeBlockSubmit`
 func (o *Operator) Seal(txs types.Transactions) error {
 	block := o.constructBlock(txs)
+	err := o.WriteBlock(block)
+	if err != nil {
+		return err
+	}
+
+	for _, tx := range block.Transactions() {
+		hash := tx.Hash()
+		o.txPool.removeTx(hash, true)
+	}
+	// sumbit block every n blocks
+	err = o.SubmitBlock(block)
+	if err != nil {
+		log.WithError(err).Error("operator.SubmitBlock Error.")
+		return err
+	}
+
+	return nil
+}
+
+// SealDeposit get txs from txpool and construct block, then seal the block
+func (o *Operator) SealDeposit(depositBlockNum *big.Int, tx *types.Transaction) error {
+	block := o.constructDepositBlock(depositBlockNum, tx)
+	return o.WriteBlock(block)
+}
+
+func (o *Operator) WriteBlock(block *types.Block) error {
 	newDbTx := o.chain.db.BeginTx()
 	if !newDbTx {
 		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
 	}
+	WriteBlockFun := o.chain.WriteBlock
+	blockNum := block.Header().Number.Int64()
+	if blockNum%1000 != 0 {
+		WriteBlockFun = o.chain.WriteDepositBlock
+	}
+
 	// append block to chain and update chain head
-	if err := o.chain.WriteBlock(block); err != nil {
+	if err := WriteBlockFun(block); err != nil {
 		_err := o.chain.db.RollbackTx()
 		if _err != nil {
 			log.Error("db.RollbackTx Error:", _err.Error())
@@ -189,74 +220,6 @@ func (o *Operator) Seal(txs types.Transactions) error {
 		}
 		return err
 	}
-
-	for _, tx := range block.Transactions() {
-		hash := tx.Hash()
-		o.txPool.removeTx(hash, true)
-	}
-	// sumbit block every n blocks
-	err := o.SubmitBlock(block)
-	if err != nil {
-		log.WithError(err).Error("operator.SubmitBlock Error.")
-		return err
-	}
-
-	return nil
-}
-
-// SealDeposit get txs from txpool and construct block, then seal the block
-func (o *Operator) SealDeposit(depositBlockNum *big.Int, tx *types.Transaction) error {
-	block := o.constructDepositBlock(depositBlockNum, tx)
-	newDbTx := o.chain.db.BeginTx()
-	if !newDbTx {
-		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
-	}
-	// append block to chain and update chain head
-	if err := o.chain.WriteDepositBlock(block); err != nil {
-		_err := o.chain.db.RollbackTx()
-		if _err != nil {
-			log.Error("db.RollbackTx Error:", _err.Error())
-		}
-
-		return err
-	}
-	o.chain.ReplaceHead(block)
-	o.currentChildBlock = uint64(depositBlockNum.Int64())
-	o.newBlockCh <- block
-	// add deposit utxo to set
-	for txIdx, tx := range block.Transactions() {
-		for outIdx, out := range tx.GetOutsCopy() {
-			utxo := types.UTXO{
-				UTXOID: types.UTXOID{
-					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
-				},
-				TxOut: types.TxOut{
-					Amount: out.Amount,
-					Owner:  out.Owner,
-				},
-			}
-			if err := o.utxoRD.Put(&utxo); err != nil {
-				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
-				_err := o.chain.db.RollbackTx()
-				if _err != nil {
-					log.Error("db.RollbackTx Error:", _err.Error())
-				}
-				return err
-			}
-		}
-
-	}
-	if err := o.chain.db.CommitTx(); err != nil {
-		log.WithError(err).Error("failed to commit db tx")
-		_err := o.chain.db.RollbackTx()
-		if _err != nil {
-			log.Error("db.RollbackTx Error:", _err.Error())
-		}
-		return err
-	}
-
-	//TODO: broadcast deposit block to p2p network
-
 	return nil
 }
 

@@ -285,7 +285,7 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 		"blockNum": block.Number(),
 	}
 	log.Debugf("SubmitBlock root %v", block.Header().TxHash.Hex())
-	return nil
+	// return nil
 	tx, err := rc.chain.CallWithAbi(context.Background(), from, common.Hex2Bytes(rc.cxAddr), SubmitBlockMethodName, big.NewInt(0), callData, rc.abiStr)
 	if err != nil {
 		log.WithError(err).Error("submitblock callData", callData)
@@ -299,4 +299,30 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 	}
 	log.Debugf("SubmitBlock:%v", tx.Hex())
 	return rc.chain.ConfirmTrans(context.Background(), tx, sigBytes)
+}
+
+func (rc *RootChain) RootChainBlockNums() (*big.Int, error) {
+	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
+	if err != nil {
+		log.Error("Decode cxAddr Error:", err)
+		return nil, err
+	}
+
+	ret := new(*big.Int)
+	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "getBlockCount", ret)
+	log.Debugf("RootChainBlockNums ret:%v, err:%v", *ret, err)
+	return *ret, err
+}
+
+func (rc *RootChain) GetRootChainBlockNumByIndex(index int64) (*big.Int, error) {
+	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
+	if err != nil {
+		log.Error("Decode cxAddr Error:", err)
+		return nil, err
+	}
+	arg := big.NewInt(index)
+
+	ret := new(*big.Int)
+	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "blockNums", ret, arg)
+	return *ret, err
 }

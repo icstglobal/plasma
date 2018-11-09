@@ -17,6 +17,8 @@
 package core
 
 import (
+	"errors"
+
 	// "crypto/ecdsa"
 	// "github.com/ethereum/go-ethereum/common"
 	"github.com/icstglobal/plasma/core/types"
@@ -89,4 +91,68 @@ func (v *Validator) ProcessRemoteBlock(block *types.Block) {
 
 func (v *Validator) SubscribeNewBlockCh(ch chan *types.Block) {
 	v.newBlockCh = ch
+}
+func (v *Validator) WriteBlock(block *types.Block) error {
+	newDbTx := v.chain.db.BeginTx()
+	if !newDbTx {
+		return errors.New("database race detected, there should be no tx pending when plasma operator commit a block")
+	}
+	WriteBlockFun := v.chain.WriteBlock
+	blockNum := block.Header().Number.Int64()
+	if blockNum%1000 != 0 {
+		WriteBlockFun = v.chain.WriteDepositBlock
+	}
+
+	// append block to chain and update chain head
+	if err := WriteBlockFun(block); err != nil {
+		_err := v.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
+		}
+
+		return err
+	}
+	v.chain.ReplaceHead(block)
+	v.currentChildBlock = block.NumberU64()
+	// broadcast Block
+	v.newBlockCh <- block
+
+	// remove used utxo
+	for txIdx, tx := range block.Transactions() {
+		for _, in := range tx.GetInsCopy() {
+			if err := v.utxoRD.Del(in.ID()); err != nil {
+				log.WithError(err).WithField("utxo", *in).Error("failed to delete utxo")
+			}
+		}
+		for outIdx, out := range tx.GetOutsCopy() {
+			utxo := types.UTXO{
+				UTXOID: types.UTXOID{
+					BlockNum: block.NumberU64(), TxIndex: uint32(txIdx), OutIndex: byte(outIdx),
+				},
+				TxOut: types.TxOut{
+					Amount: out.Amount,
+					Owner:  out.Owner,
+				},
+			}
+			if err := v.utxoRD.Put(&utxo); err != nil {
+				log.WithError(err).WithField("utxo", utxo).Error("failed to write utxo")
+				_err := v.chain.db.RollbackTx()
+				if _err != nil {
+					log.Error("db.RollbackTx Error:", _err.Error())
+				}
+				return err
+			}
+		}
+
+	}
+	if err := v.chain.db.CommitTx(); err != nil {
+		log.WithError(err).Error("failed to commit db tx")
+		//TODO: need recover here
+		_err := v.chain.db.RollbackTx()
+		if _err != nil {
+			log.Error("db.RollbackTx Error:", _err.Error())
+		}
+		return err
+	}
+	return nil
 }

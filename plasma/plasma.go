@@ -37,6 +37,7 @@ type Worker interface {
 	ProcessRemoteBlock(block *types.Block)
 	// SubscribeNewTxsCh(ch chan types.Transactions)
 	SubscribeNewBlockCh(ch chan *types.Block)
+	WriteBlock(block *types.Block) error
 }
 
 // Plasma implements the Ethereum full node service.
@@ -337,4 +338,12 @@ func (s *Plasma) SubscribeNewTxsCh(ch chan types.Transactions) {
 
 func (s *Plasma) SubscribeNewBlockCh(ch chan *types.Block) {
 	s.worker.SubscribeNewBlockCh(ch)
+}
+
+func (s *Plasma) WriteBlock(block *types.Block) error {
+	return s.worker.WriteBlock(block)
+}
+
+func (s *Plasma) RootChain() *core.RootChain {
+	return s.rootchain
 }
