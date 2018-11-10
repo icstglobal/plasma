@@ -190,6 +190,11 @@ func (o *Operator) WriteBlock(block *types.Block) error {
 		for _, in := range tx.GetInsCopy() {
 			if err := o.utxoRD.Del(in.ID()); err != nil {
 				log.WithError(err).WithField("utxo", *in).Error("failed to delete utxo")
+				_err := o.chain.db.RollbackTx()
+				if _err != nil {
+					log.Error("db.RollbackTx Error:", _err.Error())
+				}
+				return err
 			}
 		}
 		for outIdx, out := range tx.GetOutsCopy() {
