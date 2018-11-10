@@ -178,7 +178,9 @@ func (o *Operator) WriteBlock(block *types.Block) error {
 
 		return err
 	}
-	o.chain.ReplaceHead(block)
+	if block.Header().Number.Cmp(o.chain.CurrentBlock().Number()) == 1 {
+		o.chain.ReplaceHead(block)
+	}
 	o.currentChildBlock = block.NumberU64()
 	// broadcast Block
 	o.newBlockCh <- block

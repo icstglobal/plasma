@@ -112,7 +112,9 @@ func (v *Validator) WriteBlock(block *types.Block) error {
 
 		return err
 	}
-	v.chain.ReplaceHead(block)
+	if block.Header().Number.Cmp(v.chain.CurrentBlock().Number()) == 1 {
+		v.chain.ReplaceHead(block)
+	}
 	v.currentChildBlock = block.NumberU64()
 	// broadcast Block
 	v.newBlockCh <- block
