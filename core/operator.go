@@ -68,6 +68,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 		quit:       make(chan struct{}),
 		utxoRD:     utxoRD,
 	}
+	log.Debug("Register...........")
 	// complete block submit when we get the BlockSubmittedEvent from root chain
 	rootchain.RegisterBlockSubmittedEventHandler(oper.completeBlockSubmit)
 	rootchain.RegisterDepositEventHandler(oper.handleDepositEvent)
@@ -247,6 +248,7 @@ func (o *Operator) constructDepositBlock(depositBlockNum *big.Int, tx *types.Tra
 }
 
 func (o *Operator) handleDepositEvent(depositBlockNum *big.Int, depositor, token common.Address, amount *big.Int) error {
+	log.Debug("handleDepositEvent........")
 	//TODO: token is not used yet. It will be include for supporting ERC 20 token.
 
 	// construct tx

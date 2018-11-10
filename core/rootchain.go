@@ -157,6 +157,7 @@ func (rc *RootChain) PutFromBlock(fromBlock *big.Int) error {
 }
 
 func (rc *RootChain) loopEvents(eventTypes map[string]reflect.Type) {
+	time.Sleep(time.Second)
 	log.Debug("rootchain:loop events")
 	//TODO: for local test only
 	fromBlock := big.NewInt(100)
@@ -344,4 +345,17 @@ func (rc *RootChain) GetRootChainBlockByBlockNum(blockNum int64) ([32]byte, erro
 	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "childChain", out, arg)
 	log.Debugf("GetRootChainBlockByBlockNum ret0: %v ret1: %v", *ret0, *ret1)
 	return *ret0, err
+}
+
+func (rc *RootChain) GetOperatorAddress() (common.Address, error) {
+	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
+	if err != nil {
+		log.Error("Decode cxAddr Error:", err)
+		return common.Address{}, err
+	}
+
+	ret := new(common.Address)
+	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "operator", ret)
+	log.Debugf("GetOperatorAddress ret:%v, err:%v", *ret, err)
+	return *ret, err
 }

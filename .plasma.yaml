@@ -13,7 +13,6 @@ logger:
   level: debug
 
 plasma:
-    isOperator: true
     datadir: testdata
     networkId: 1
     bootstrapNodes:
@@ -22,8 +21,9 @@ plasma:
     
 
 rootchain:
+    keystorePath: ./keystore
     operPwd: wzp
     url: http://119.28.248.204:8546
-    cxAddr: "8c81900b4d3f1997b605e66ce7c1597e8480c4f2" 
-    cxFileName: "rootchain/deploy/contract_data/RootChain.json" 
+    cxAddr: 8c81900b4d3f1997b605e66ce7c1597e8480c4f2
+    cxFileName: rootchain/deploy/contract_data/RootChain.json
     fromBlock: 2000
