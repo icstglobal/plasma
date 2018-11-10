@@ -83,53 +83,55 @@ func (handler *BlockHandler) broadcastBlock() {
 func (handler *BlockHandler) downloadBlocks() {
 	log.Debug("downloadBlocks")
 
-	var currentIndex int64 = 0
+	var currentBlockNum int64 = 0
 
 	for {
-		blockNums, err := handler.pls.RootChain().RootChainBlockNums()
-		if currentIndex >= blockNums.Int64() {
-			time.Sleep(time.Second * 10)
-		}
+
+		maxBlockNum, err := handler.getMaxBlockNum()
 		if err != nil {
 			log.WithError(err).Error("RootChainBlockNums Error")
 			return
 		}
+		if currentBlockNum >= maxBlockNum {
+			time.Sleep(time.Second * 10)
+			continue
+		}
 
 		currentBlockNum := handler.pls.BlockChain().CurrentBlock().Number().Int64()
 
-		blockNum, err := handler.pls.RootChain().GetRootChainBlockNumByIndex(currentIndex)
-		if err != nil {
-			log.WithError(err).Error("GetRootChainBlockNumByIndex Error")
-			return
+		log.Debugf("currentBlockNum %v maxBlockNum %v", currentBlockNum, maxBlockNum)
+		for blockNum := currentBlockNum + 1; blockNum <= maxBlockNum; blockNum++ {
+			log.Debugf("blockNum: %v currentBlockNum: %v", blockNum, currentBlockNum)
+			// if can't get block Info from rootchain then move to next interval
+			root, err := handler.pls.RootChain().GetRootChainBlockByBlockNum(blockNum)
+			if root == [32]byte{} {
+				// jump to next submitblock
+				blockNum = blockNum/1000*1000 + 1000 - 1
+				continue
+			}
+			peerids := handler.host.PeerIDs()
+			if len(peerids) == 0 {
+				continue
+			}
+			targetPeerId := peerids[0]
+			resp, err := handler.host.Request(getBlockProto, targetPeerId, big.NewInt(blockNum))
+			var block *types.Block
+			log.Debugf("response msg: %v", resp)
+			err = handler.host.Decode(resp, &block)
+			if err != nil {
+				log.WithError(err).Error("recvBlocks Decode Error!")
+				return
+			}
+			handler.host.MarkBlock(targetPeerId, block)
+			// write block to chain, cache the block if it's not sequential.
+			err = handler.pls.WriteBlock(block)
+			if err != nil {
+				log.WithError(err).Error("recvBlock WriteBlock Error")
+				return
+			}
+
 		}
-		currentIndex++
-		if currentBlockNum >= blockNum.Int64() {
-			continue
-		}
-		log.Debugf("blockNum: %v currentBlockNum: %v", blockNum.Int64(), currentBlockNum)
-		if blockNum.Int64() <= currentBlockNum {
-			continue
-		}
-		peerids := handler.host.PeerIDs()
-		if len(peerids) == 0 {
-			continue
-		}
-		targetPeerId := peerids[0]
-		resp, err := handler.host.Request(getBlockProto, targetPeerId, big.NewInt(blockNum.Int64()))
-		var block *types.Block
-		log.Debugf("response msg: %v", resp)
-		err = handler.host.Decode(resp, &block)
-		if err != nil {
-			log.WithError(err).Error("recvBlocks Decode Error!")
-			return
-		}
-		handler.host.MarkBlock(targetPeerId, block)
-		// write block to chain, cache the block if it's not sequential.
-		err = handler.pls.WriteBlock(block)
-		if err != nil {
-			log.WithError(err).Error("recvBlock WriteBlock Error")
-			return
-		}
+
 		time.Sleep(time.Second * 2)
 	}
 }
@@ -159,4 +161,16 @@ func (handler *BlockHandler) getBlock(s inet.Stream) {
 		return
 	}
 	log.Debug("getBlock done")
+}
+
+func (handler *BlockHandler) getMaxBlockNum() (int64, error) {
+	currentChildBlock, err := handler.pls.RootChain().GetCurrentChildBlock()
+	if err != nil {
+		return -1, err
+	}
+	currentDepositBlock, err := handler.pls.RootChain().GetCurrentDepositBlock()
+	if err != nil {
+		return -1, err
+	}
+	return (currentChildBlock.Int64() - 1000 + currentDepositBlock.Int64() - 1), nil
 }

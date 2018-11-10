@@ -301,7 +301,7 @@ func (rc *RootChain) SubmitBlock(block *types.Block, privateKey *ecdsa.PrivateKe
 	return rc.chain.ConfirmTrans(context.Background(), tx, sigBytes)
 }
 
-func (rc *RootChain) RootChainBlockNums() (*big.Int, error) {
+func (rc *RootChain) GetCurrentChildBlock() (*big.Int, error) {
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
 	if err != nil {
 		log.Error("Decode cxAddr Error:", err)
@@ -309,20 +309,39 @@ func (rc *RootChain) RootChainBlockNums() (*big.Int, error) {
 	}
 
 	ret := new(*big.Int)
-	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "getBlockCount", ret)
+	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "currentChildBlock", ret)
 	log.Debugf("RootChainBlockNums ret:%v, err:%v", *ret, err)
 	return *ret, err
 }
 
-func (rc *RootChain) GetRootChainBlockNumByIndex(index int64) (*big.Int, error) {
+func (rc *RootChain) GetCurrentDepositBlock() (*big.Int, error) {
 	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
 	if err != nil {
 		log.Error("Decode cxAddr Error:", err)
 		return nil, err
 	}
-	arg := big.NewInt(index)
 
 	ret := new(*big.Int)
-	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "blockNums", ret, arg)
+	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "currentDepositBlock", ret)
+	log.Debugf("RootChainBlockNums ret:%v, err:%v", *ret, err)
 	return *ret, err
+}
+
+func (rc *RootChain) GetRootChainBlockByBlockNum(blockNum int64) ([32]byte, error) {
+	cxAddrBytes, err := hex.DecodeString(rc.cxAddr)
+	if err != nil {
+		log.Error("Decode cxAddr Error:", err)
+		return [32]byte{}, err
+	}
+	arg := big.NewInt(blockNum)
+
+	ret0 := new([32]byte)
+	ret1 := new(*big.Int)
+	out := &[]interface{}{
+		ret0,
+		ret1,
+	}
+	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "childChain", out, arg)
+	log.Debugf("GetRootChainBlockByBlockNum ret0: %v ret1: %v", *ret0, *ret1)
+	return *ret0, err
 }
