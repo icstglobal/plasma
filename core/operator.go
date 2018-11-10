@@ -72,7 +72,7 @@ func NewOperator(chain *BlockChain, pool *TxPool, privateKey *ecdsa.PrivateKey, 
 	rootchain.RegisterBlockSubmittedEventHandler(oper.completeBlockSubmit)
 	rootchain.RegisterDepositEventHandler(oper.handleDepositEvent)
 	currentBlockNum := chain.CurrentHeader().Number.Uint64()
-	oper.currentChildBlock = currentBlockNum
+	oper.currentChildBlock = currentBlockNum / childBlockInterval * childBlockInterval
 	return oper
 }
 
@@ -262,7 +262,7 @@ func (o *Operator) handleDepositEvent(depositBlockNum *big.Int, depositor, token
 
 // construct non-deposit block
 func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
-	nextChildBlock := (o.currentChildBlock/childBlockInterval + 1) * childBlockInterval
+	nextChildBlock := o.currentChildBlock + childBlockInterval
 	// header
 	header := &types.Header{
 		Coinbase: o.Addr,
