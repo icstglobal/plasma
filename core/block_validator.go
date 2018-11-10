@@ -36,9 +36,9 @@ func (v *UtxoBlockValidator) ValidateBody(block *types.Block) error {
 	}
 	log.Debug("block.NumberU64:", block.NumberU64())
 	//different with Ethereum here, "fork" will never happen
-	if !v.blcReader.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-		// return consensus.ErrUnknownAncestor
-	}
+	// if !v.blcReader.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+	// return consensus.ErrUnknownAncestor
+	// }
 	// Header validity is known at this point, check transactions
 	header := block.Header()
 	if hash := types.DeriveSha(block.Transactions()); hash != header.TxHash {
