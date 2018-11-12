@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"github.com/icstglobal/plasma/consensus"
+	// "github.com/icstglobal/plasma/consensus"
 	"github.com/icstglobal/plasma/core/types"
 	log "github.com/sirupsen/logrus"
 )
@@ -34,10 +34,11 @@ func (v *UtxoBlockValidator) ValidateBody(block *types.Block) error {
 	if v.blcReader.HasBlock(block.Hash(), block.NumberU64()) {
 		return ErrKnownBlock
 	}
+	log.Debug("block.NumberU64:", block.NumberU64())
 	//different with Ethereum here, "fork" will never happen
-	if !v.blcReader.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-		return consensus.ErrUnknownAncestor
-	}
+	// if !v.blcReader.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+	// return consensus.ErrUnknownAncestor
+	// }
 	// Header validity is known at this point, check transactions
 	header := block.Header()
 	if hash := types.DeriveSha(block.Transactions()); hash != header.TxHash {
@@ -56,6 +57,9 @@ func (v *UtxoBlockValidator) validateTx(trans types.Transactions) error {
 		}
 		ins := tx.GetInsCopy()
 		for _, in := range ins {
+			if types.IsNullUTXO(in) {
+				continue
+			}
 			if _, exist := spent[in.ID()]; exist {
 				return ErrDuplicateSpent
 			}
@@ -63,7 +67,7 @@ func (v *UtxoBlockValidator) validateTx(trans types.Transactions) error {
 			utxo := v.utxoReader.Get(in.ID())
 			if utxo == nil {
 				// fatal error, log and exit
-				log.Fatal("UtxoValidator.ValidateBody:utxo not exist, it should not pass the tx validation")
+				log.WithField("in.ID", in.ID()).Fatal("UtxoValidator.ValidateBody:utxo not exist, it should not pass the tx validation")
 			}
 			// mark it as spent, so won't be spent later in other tx
 			spent[in.ID()] = utxo

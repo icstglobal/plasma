@@ -46,6 +46,9 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 
 	totalInAmount := new(big.Int)
 	for i, in := range ins {
+		if in.ID().BlockNum == 0 {
+			continue
+		}
 		log.WithFields(log.Fields{"blockNum": in.BlockNum, "txIndex": in.TxIndex, "outIndex": in.OutIndex}).Debug("validate tx in with utxo set")
 		utxo := v.utxoReader.Get(in.ID())
 		// make sure utxo exists and is unspent
@@ -63,6 +66,9 @@ func (v *UtxoTxValidator) Validate(tx *types.Transaction) error {
 	newOuts := tx.GetOutsCopy()
 	totalOutAmount := new(big.Int)
 	for _, out := range newOuts {
+		if out.Amount == nil || out.Amount.Cmp(big0) == 0 {
+			continue
+		}
 		if out.Amount.Cmp(big0) <= 0 {
 			return ErrInvalidOutputAmount
 		}

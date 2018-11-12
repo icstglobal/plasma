@@ -11,5 +11,5 @@ import:
   version: v1.2.0
 - package: github.com/jinzhu/copier
 - package: github.com/ethereum/go-ethereum
-  version: ^1.8.3
+  version: v1.8.13
 - package: github.com/icstglobal/go-icst

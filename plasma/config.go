@@ -85,6 +85,7 @@ type Config struct {
 	CxAbi        string
 	OperPwd      string
 	KeystorePath string
+	IsOperator   bool
 }
 
 type configMarshaling struct {

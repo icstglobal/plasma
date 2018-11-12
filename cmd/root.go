@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/icstglobal/plasma/cmd/client"
+
 	"github.com/icstglobal/plasma/cmd/node"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -59,4 +61,5 @@ func initConfig() {
 
 func initSubCommands() {
 	rootCmd.AddCommand(node.NodeCmd)
+	rootCmd.AddCommand(client.TransferCmd)
 }

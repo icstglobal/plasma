@@ -31,6 +31,15 @@ type LesServer interface {
 	// SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
 }
 
+type Worker interface {
+	Start()
+	ProcessRemoteTxs(txs types.Transactions)
+	ProcessRemoteBlock(block *types.Block)
+	// SubscribeNewTxsCh(ch chan types.Transactions)
+	SubscribeNewBlockCh(ch chan *types.Block)
+	WriteBlock(block *types.Block) error
+}
+
 // Plasma implements the Ethereum full node service.
 type Plasma struct {
 	config      *Config
@@ -57,7 +66,7 @@ type Plasma struct {
 	// APIBackend *EthAPIBackend
 
 	// miner     *miner.Miner
-	operator *core.Operator
+	worker   Worker // operator or validator
 	operbase common.Address
 
 	networkID uint64
@@ -135,16 +144,48 @@ func New(config *Config) (*Plasma, error) {
 	txValidator := core.NewUtxoTxValidator(types.NewEIP155Signer(pls.chainConfig.ChainID), us)
 	pls.txPool = core.NewTxPool(config.TxPool, pls.chainConfig, pls.blockchain, txValidator)
 
+	//dial eth chain
+	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr, pls.chainDb)
+	if err != nil {
+		return nil, err
+	}
+	key := getOperaterKey(config)
+
+	address, err := pls.rootchain.GetOperatorAddress()
+	if key != nil {
+		from := pls.rootchain.PubKeyToAddress(key.PrivateKey)
+		if common.BytesToAddress(from) == address {
+			config.IsOperator = true
+		} else {
+			config.IsOperator = false
+		}
+	}
+	log.Debugf("config.IsOperator:%v", config.IsOperator)
+
+	// new operator
+	if config.IsOperator {
+		pls.worker = core.NewOperator(pls.BlockChain(), pls.TxPool(), key.PrivateKey, us, pls.rootchain)
+	} else {
+		pls.worker = core.NewValidator(pls.BlockChain(), us, pls.rootchain)
+	}
+
+	pls.worker.Start()
+	return pls, nil
+}
+
+func getOperaterKey(config *Config) *keystore.Key {
+	if config.KeystorePath == "" {
+		return nil
+	}
 	// load from keystore
-	keystoreDir := "./keystore"
-	files, err := ioutil.ReadDir(keystoreDir)
+	files, err := ioutil.ReadDir(config.KeystorePath)
 	if err != nil {
 		log.Error("keystore ioutil.ReadDir Error:", err)
 	}
 
 	var key *keystore.Key
 	for _, file := range files {
-		path := keystoreDir + "/" + file.Name()
+		path := config.KeystorePath + "/" + file.Name()
 		log.Debug("key path:", path, config.OperPwd)
 		jsonStr, err := ioutil.ReadFile(path)
 		pwd := config.OperPwd
@@ -155,20 +196,8 @@ func New(config *Config) (*Plasma, error) {
 		}
 		break
 	}
-	if key == nil {
-		return nil, fmt.Errorf("can not find operator key!")
-	}
-
-	//dial eth chain
-	pls.rootchain, err = core.NewRootChain(config.ChainUrl, config.CxAbi, config.CxAddr, pls.chainDb)
-	if err != nil {
-		return nil, err
-	}
-	// new operator
-	pls.operator = core.NewOperator(pls.BlockChain(), pls.TxPool(), key.PrivateKey, us, pls.rootchain)
-	pls.operator.Start()
-	pls.rootchain.SetTxsCh(pls.operator.TxsCh)
-	return pls, nil
+	log.Debugf("getOperaterKey:%v", key)
+	return key
 }
 
 func makeExtraData(extra []byte) []byte {
@@ -225,15 +254,6 @@ func (s *Plasma) Operbase() common.Address {
 	return common.Address{}
 }
 
-// SetEtherbase sets the mining reward address.
-func (s *Plasma) SetEtherbase(operbase common.Address) {
-	s.lock.Lock()
-	s.operbase = operbase
-	s.lock.Unlock()
-
-	s.operator.SetOperbase(operbase)
-}
-
 func (s *Plasma) StartMining(local bool) error {
 	eb := s.Operbase()
 	nullAddr := common.Address{}
@@ -259,10 +279,11 @@ func (s *Plasma) StartMining(local bool) error {
 
 func (s *Plasma) BlockChain() *core.BlockChain { return s.blockchain }
 func (s *Plasma) TxPool() *core.TxPool         { return s.txPool }
-func (s *Plasma) EventMux() *event.TypeMux     { return s.eventMux }
-func (s *Plasma) Engine() consensus.Engine     { return s.engine }
-func (s *Plasma) ChainDb() store.Database      { return s.chainDb }
-func (s *Plasma) IsListening() bool            { return true } // Always listening
+
+func (s *Plasma) EventMux() *event.TypeMux { return s.eventMux }
+func (s *Plasma) Engine() consensus.Engine { return s.engine }
+func (s *Plasma) ChainDb() store.Database  { return s.chainDb }
+func (s *Plasma) IsListening() bool        { return true } // Always listening
 // func (s *Plasma) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Plasma) NetVersion() uint64 { return s.networkID }
 func (s *Plasma) Config() *Config    { return s.config }
@@ -321,4 +342,24 @@ func (s *Plasma) Stop() error {
 	close(s.shutdownChan)
 
 	return nil
+}
+
+func (s *Plasma) ProcessRemoteTxs(txs types.Transactions) {
+	s.worker.ProcessRemoteTxs(txs)
+}
+
+func (s *Plasma) SubscribeNewTxsCh(ch chan types.Transactions) {
+	s.txPool.SubscribeNewTxsCh(ch)
+}
+
+func (s *Plasma) SubscribeNewBlockCh(ch chan *types.Block) {
+	s.worker.SubscribeNewBlockCh(ch)
+}
+
+func (s *Plasma) WriteBlock(block *types.Block) error {
+	return s.worker.WriteBlock(block)
+}
+
+func (s *Plasma) RootChain() *core.RootChain {
+	return s.rootchain
 }

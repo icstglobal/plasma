@@ -142,9 +142,10 @@ type TxPool struct {
 	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
-	queue types.Transactions           // Queued but non-processable transactions
-	beats map[common.Address]time.Time // Last heartbeat from each known account
-	all   *txLookup                    // All transactions to allow lookups
+	queue  types.Transactions           // Queued but non-processable transactions
+	beats  map[common.Address]time.Time // Last heartbeat from each known account
+	all    *txLookup                    // All transactions to allow lookups
+	newTxs chan types.Transactions
 
 	wg sync.WaitGroup // for shutdown sync
 }
@@ -431,6 +432,11 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) error {
 
 	// notify other subsystem about the new tx
 	go pool.txFeed.Send(NewTxsEvent{[]*types.Transaction{tx}})
+	log.Debug("add new tx")
+	// add new tx
+	if pool.newTxs != nil {
+		pool.newTxs <- []*types.Transaction{tx}
+	}
 
 	// Mark local addresses and journal local transactions
 	if local {
@@ -516,6 +522,7 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 	// Add the batch of transaction, tracking the accepted ones
 	errs := make([]error, len(txs))
 
+	log.Debug("addTxsLocked", len(txs))
 	for i, tx := range txs {
 		errs[i] = pool.add(tx, local)
 	}
@@ -554,6 +561,10 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 
 	// call the pointer verison method
 	(&(pool.queue)).Remove(txOffset)
+}
+
+func (pool *TxPool) SubscribeNewTxsCh(ch chan types.Transactions) {
+	pool.newTxs = ch
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.

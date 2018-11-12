@@ -70,9 +70,7 @@ func (action ActionHandler) Deposit(plasma *plasma.Plasma) http.HandlerFunc {
 		}
 
 		// todo: deposit can't get blockNum, fix it later
-		callData := map[string]interface{}{
-			"blockNum": big.NewInt(1),
-		}
+		callData := map[string]interface{}{}
 		// call rootchain contract deposit
 		tx, err := blc.CallWithAbi(context.Background(), from, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(depositReq.Amount)), callData, plasma.Config().CxAbi)
 		if err != nil {
@@ -134,9 +132,7 @@ func (action ActionHandler) AfterSign(plasma *plasma.Plasma) http.HandlerFunc {
 			return
 		}
 		// todo: deposit can't get blockNum, fix it later
-		callData := map[string]interface{}{
-			"blockNum": big.NewInt(1),
-		}
+		callData := map[string]interface{}{}
 		// call rootchain contract deposit
 		tx, err := blc.CallWithAbi(context.Background(), from, common.Hex2Bytes(plasma.Config().CxAddr), DepositMethodName, big.NewInt(int64(_req.Amount)), callData, plasma.Config().CxAbi)
 		if err != nil {
