@@ -179,10 +179,11 @@ func (o *Operator) WriteBlock(block *types.Block) error {
 
 		return err
 	}
+	log.Debugf("block.blockNumber%v:header.blockNumer:%v", block.Header().Number, o.chain.CurrentBlock().Number())
 	if block.Header().Number.Cmp(o.chain.CurrentBlock().Number()) == 1 {
+
 		o.chain.ReplaceHead(block)
 	}
-	o.currentChildBlock = block.NumberU64()
 	// broadcast Block
 	o.newBlockCh <- block
 
@@ -248,7 +249,6 @@ func (o *Operator) constructDepositBlock(depositBlockNum *big.Int, tx *types.Tra
 }
 
 func (o *Operator) handleDepositEvent(depositBlockNum *big.Int, depositor, token common.Address, amount *big.Int) error {
-	log.Debug("handleDepositEvent........")
 	//TODO: token is not used yet. It will be include for supporting ERC 20 token.
 
 	// construct tx
@@ -272,6 +272,8 @@ func (o *Operator) handleDepositEvent(depositBlockNum *big.Int, depositor, token
 // construct non-deposit block
 func (o *Operator) constructBlock(txs types.Transactions) *types.Block {
 	nextChildBlock := o.currentChildBlock + childBlockInterval
+
+	o.currentChildBlock = nextChildBlock
 	// header
 	header := &types.Header{
 		Coinbase: o.Addr,

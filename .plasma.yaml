@@ -24,6 +24,6 @@ rootchain:
     keystorePath: ./keystore
     operPwd: wzp
     url: http://119.28.248.204:8546
-    cxAddr: 8c81900b4d3f1997b605e66ce7c1597e8480c4f2
+    cxAddr: e5a2bdca1c63f0136a0c1d87689ab7110f0b562d
     cxFileName: rootchain/deploy/contract_data/RootChain.json
     fromBlock: 2000

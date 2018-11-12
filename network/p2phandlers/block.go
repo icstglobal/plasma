@@ -97,10 +97,10 @@ func (handler *BlockHandler) downloadBlocks() {
 			continue
 		}
 
-		currentBlockNum := handler.pls.BlockChain().CurrentBlock().Number().Int64()
-
 		log.Debugf("currentBlockNum %v maxBlockNum %v", currentBlockNum, maxBlockNum)
+		currentBlockNum = handler.pls.BlockChain().CurrentBlock().Number().Int64()
 		for blockNum := currentBlockNum + 1; blockNum <= maxBlockNum; blockNum++ {
+			currentBlockNum = handler.pls.BlockChain().CurrentBlock().Number().Int64()
 			log.Debugf("blockNum: %v currentBlockNum: %v", blockNum, currentBlockNum)
 			// if can't get block Info from rootchain then move to next interval
 			root, err := handler.pls.RootChain().GetRootChainBlockByBlockNum(blockNum)

@@ -311,7 +311,7 @@ func (rc *RootChain) GetCurrentChildBlock() (*big.Int, error) {
 
 	ret := new(*big.Int)
 	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "currentChildBlock", ret)
-	log.Debugf("RootChainBlockNums ret:%v, err:%v", *ret, err)
+	log.Debugf("GetCurrentChildBlock ret:%v, err:%v", *ret, err)
 	return *ret, err
 }
 
@@ -324,7 +324,7 @@ func (rc *RootChain) GetCurrentDepositBlock() (*big.Int, error) {
 
 	ret := new(*big.Int)
 	err = rc.chain.Query(context.Background(), cxAddrBytes, rc.abiStr, "currentDepositBlock", ret)
-	log.Debugf("RootChainBlockNums ret:%v, err:%v", *ret, err)
+	log.Debugf("GetCurrentDepositBlock ret:%v, err:%v", *ret, err)
 	return *ret, err
 }
 
